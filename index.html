@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CCCCRRRRCCCC 代币控制面板</title>
+  <title>CCCCRRRRCCCC 代币控制面板 v1.0</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Microsoft YaHei', sans-serif; background: #f0f2f5; padding: 20px; }
     .container { max-width: 1400px; margin: auto; background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); overflow: hidden; }
-    .header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 25px; text-align: center; }
-    .header h1 { font-size: 28px; letter-spacing: 2px; margin-bottom: 8px; }
+    .header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 25px; text-align: center; position: relative; }
+    .header h1 { font-size: 28px; letter-spacing: 2px; margin-bottom: 4px; }
+    .version { font-size: 14px; opacity: 0.85; }
     .addr-bar, .wallet-bar { display: flex; justify-content: center; align-items: center; gap: 15px; padding: 15px; background: #e8edf2; flex-wrap: wrap; }
     .wallet-bar { background: #dde4ec; }
     .addr-bar input { padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px; width: 420px; max-width: 90vw; font-size: 14px; }
@@ -27,7 +28,6 @@
     select { padding: 6px 10px; border-radius: 6px; border: 1px solid #ced4da; }
     .error { color: #dc3545; }
     .success { color: #198754; }
-    .status-msg { margin: 8px 0; font-size: 14px; }
     @media (max-width: 600px) {
       .grid { grid-template-columns: 1fr; }
       .label { width: 100px; }
@@ -38,6 +38,7 @@
 <div class="container">
   <div class="header">
     <h1>🐼 CCCC RRRR CCCC 控制面板</h1>
+    <div class="version">版本 v1.0</div>
   </div>
 
   <!-- 合约地址输入与保存 -->
@@ -71,7 +72,7 @@ const STORAGE_KEY = 'ccrr_contract_addr';
 let contractAddress = localStorage.getItem(STORAGE_KEY) || '';
 let provider, signer, contract, decimals, userAddress, isOwner = false;
 
-// 完整合约ABI
+// 完整合约ABI（包含所有读取与写入函数）
 const FULL_ABI = [
   "function name() view returns (string)",
   "function symbol() view returns (string)",
@@ -351,7 +352,8 @@ function renderDashboard(d) {
   html += `<div class="section"><h2>🔧 全局开关</h2><div class="grid">`;
   html += item('增发', d.enableMint ? '✅' : '❌');
   html += item('暂停功能', d.enablePause ? '可用' : '禁用');
-  html += item('当前暂停', d.pause ? '⏸ 已暂停' : '▶ 运行中', admin ? btn('切换', () => execSimple('setPause', !d.pause)) : '');
+  // 暂停按钮：根据当前暂停状态显示“恢复”或“暂停”
+  html += item('当前暂停', d.pause ? '⏸ 已暂停' : '▶ 运行中', admin ? btn(d.pause ? '▶ 恢复' : '⏸ 暂停', () => execSimple('setPause', !d.pause)) : '');
   html += item('奖励黑名单', d.enableRewardList ? '可用' : '禁用');
   html += item('钱包限制功能', d.enableWalletLimit ? '可用' : '禁用', admin ? btn(`${d.enableWalletLimit?'关闭':'开启'}`, () => execSimple('setWalletLimitEnabled', !d.enableWalletLimit)) : '');
   html += item('冷却机制', d.enableCooldown ? '开启' : '关闭');
@@ -366,7 +368,6 @@ function renderDashboard(d) {
   // 安全与限制
   html += `<div class="section"><h2>🛡 安全与限制</h2><div class="grid">`;
   html += item('最大持币', d.maxWallet + ' ' + d.symbol, admin ? `<input id="maxWalletInput" placeholder="新数量" style="width:120px;"><button class="btn" onclick="execChangeWalletLimit()">修改</button>` : '');
-  // 冷却设置行
   html += item('冷却设置', '', admin ? `
     <label><input type="checkbox" id="cooldownEnable" ${d.enableCooldown ? 'checked' : ''}> 启用</label>
     <input id="cooldownSingle" placeholder="个人秒" style="width:80px;" value="${d.cooldownTime}">
@@ -484,7 +485,6 @@ function renderDashboard(d) {
   document.getElementById('dashboard').innerHTML = html;
 }
 
-// 工具按钮生成
 function btn(text, handler) {
   return `<button class="btn" onclick="(${handler.toString()})()">${text}</button>`;
 }
@@ -750,7 +750,7 @@ async function queryAddress() {
   } catch (e) { alert('查询失败: ' + e.message); }
 }
 
-// 自动加载只读数据
+// 页面加载时自动获取只读数据
 if (contractAddress) {
   loadAllData();
 }
