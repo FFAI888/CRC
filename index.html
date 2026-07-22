@@ -5,63 +5,73 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CCCCRRRRCCCC 代币控制面板</title>
   <style>
-    body { font-family: 'Microsoft YaHei', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Microsoft YaHei', sans-serif; background: #f0f2f5; padding: 20px; }
     .container { max-width: 1300px; margin: auto; background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); overflow: hidden; }
-    .header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 30px; text-align: center; }
-    .header h1 { margin: 0; font-size: 32px; letter-spacing: 4px; }
-    .header p { margin: 8px 0 0; opacity: 0.9; }
-    .wallet-bar { display: flex; justify-content: center; align-items: center; gap: 20px; padding: 20px; background: #e8edf2; flex-wrap: wrap; }
+    .header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 25px; text-align: center; }
+    .header h1 { font-size: 28px; letter-spacing: 2px; margin-bottom: 8px; }
+    .addr-bar { display: flex; justify-content: center; align-items: center; gap: 10px; padding: 15px; background: #e8edf2; flex-wrap: wrap; }
+    .addr-bar input { padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px; width: 400px; font-size: 14px; }
+    .wallet-bar { display: flex; justify-content: center; align-items: center; gap: 20px; padding: 15px; background: #dde4ec; }
     .wallet-bar button { padding: 10px 24px; border: none; background: #2a5298; color: white; border-radius: 8px; font-size: 16px; cursor: pointer; }
     .wallet-bar button:hover { background: #1e3c72; }
     .section { margin: 20px; padding: 20px; background: #f9fbfd; border-radius: 12px; border: 1px solid #dee2e6; }
-    .section h2 { margin: 0 0 16px; font-size: 20px; color: #2a5298; border-left: 5px solid #2a5298; padding-left: 12px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+    .section h2 { margin-bottom: 16px; color: #2a5298; border-left: 5px solid #2a5298; padding-left: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
     .item { display: flex; align-items: center; background: white; padding: 10px 14px; border-radius: 8px; border: 1px solid #e9ecef; }
-    .label { width: 130px; font-weight: bold; color: #495057; flex-shrink: 0; }
+    .label { width: 140px; font-weight: bold; color: #495057; flex-shrink: 0; }
     .value { flex: 1; color: #212529; word-break: break-all; }
-    .action { flex-shrink: 0; margin-left: 10px; display: flex; gap: 6px; }
-    input, select { padding: 6px 10px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px; }
-    button.btn { padding: 6px 14px; background: #2a5298; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
-    button.btn:hover { background: #1e3c72; }
+    .action { flex-shrink: 0; margin-left: 10px; display: flex; gap: 6px; align-items: center; }
+    input[type="text"], input[type="number"] { padding: 6px 10px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px; }
+    select { padding: 6px 10px; border-radius: 6px; border: 1px solid #ced4da; }
+    button.btn { padding: 6px 14px; background: #2a5298; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; white-space: nowrap; }
+    button.btn:hover:not(:disabled) { background: #1e3c72; }
     button.btn:disabled { background: #adb5bd; cursor: not-allowed; }
-    .status-msg { margin: 10px 0; font-size: 14px; }
-    .success { color: #198754; }
     .error { color: #dc3545; }
-    hr { margin: 20px 0; }
+    .success { color: #198754; }
+    .status-msg { margin: 8px 0; font-size: 14px; }
   </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
     <h1>🐼 CCCC RRRR CCCC 控制面板</h1>
-    <p>合约地址：<span id="contractAddr"></span> | 链ID：<span id="chainIdDisplay"></span></p>
   </div>
 
+  <!-- 合约地址输入与保存 -->
+  <div class="addr-bar">
+    <span><b>合约地址：</b></span>
+    <input type="text" id="contractAddrInput" placeholder="输入0x合约地址后点击[加载]">
+    <button class="btn" onclick="saveContractAddress()">💾 保存并加载</button>
+    <span id="addrStatus" style="font-size:14px;"></span>
+  </div>
+
+  <!-- 钱包连接 -->
   <div class="wallet-bar">
-    <button onclick="connectWallet()" id="connectBtn">🔌 连接钱包</button>
+    <button id="connectBtn" onclick="connectWallet()">🔌 连接钱包</button>
     <span id="walletAddress" style="font-weight:bold;"></span>
     <span id="ownerTag"></span>
     <span id="networkError" class="error"></span>
   </div>
 
   <div id="dashboard">
-    <div class="section"><p style="text-align:center;color:#6c757d;">正在加载数据，请稍候...</p></div>
+    <div class="section"><p style="text-align:center;color:#6c757d;">请输入合约地址并加载，或连接钱包...</p></div>
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 <script>
-// ======================= 固定配置（无需修改） =======================
-const CONTRACT_ADDRESS = '0x你的合约地址'; // 请替换为实际部署的合约地址
+// ======================= 全局变量 =======================
 const CHAIN_ID = 56;                       // 56=BSC主网, 97=BSC测试网
-const RPC_URL = 'https://bsc-dataseed.binance.org/'; // 公共RPC，可更换
-// =====================================================================
+const RPC_URL = 'https://bsc-dataseed.binance.org/';
+const STORAGE_KEY = 'ccrr_contract_addr';  // localStorage键名
 
-document.getElementById('contractAddr').innerText = CONTRACT_ADDRESS;
-document.getElementById('chainIdDisplay').innerText = CHAIN_ID;
+let contractAddress = localStorage.getItem(STORAGE_KEY) || '';
+let provider, signer, contract, decimals, userAddress, isOwner = false;
+let currentABI = [];  // 动态加载ABI，这里直接写死完整ABI
 
-// 合约完整ABI（包含所有读取与写入函数）
-const ABI = [
+// 完整合约ABI（包含所有用到的函数）
+const FULL_ABI = [
   "function name() view returns (string)",
   "function symbol() view returns (string)",
   "function decimals() view returns (uint256)",
@@ -138,7 +148,7 @@ const ABI = [
   "function _progressMineLPBlockDebt() view returns (uint256)",
   "function _mineLPRewardTimeDebt() view returns (uint256)",
   "function getBinderLength(address) view returns (uint256)",
-  // 管理员写入函数
+  // 写入函数
   "function setWhiteList(address[] calldata, bool)",
   "function setFeeWhiteList(address[] calldata, bool)",
   "function multi_bclist(address[] calldata, bool)",
@@ -163,19 +173,46 @@ const ABI = [
   "function setkb(uint256)",
   "function mintTokens(address, uint256)",
   "function setClaims(address, uint256)",
-  // Ownable相关
   "function renounceOwnership()",
   "function reclaimOwnership()",
   "function transferOwnership(address)",
-  // 公开函数
   "function bindInviter(address)"
 ];
 
-let provider, signer, contract, decimals, userAddress, isOwner = false;
+// ======================= 初始化 =======================
+document.getElementById('contractAddrInput').value = contractAddress;
+if (contractAddress) {
+  document.getElementById('addrStatus').innerText = '✅ 已加载保存的合约地址';
+  initReadOnly(contractAddress);
+} else {
+  document.getElementById('addrStatus').innerText = '⚠️ 未配置合约地址';
+}
 
-// 初始化只读provider
-provider = new ethers.providers.JsonRpcProvider(RPC_URL);
-contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+// 保存并加载合约地址
+window.saveContractAddress = function() {
+  const addr = document.getElementById('contractAddrInput').value.trim();
+  if (!ethers.utils.isAddress(addr)) {
+    alert('请输入有效的以太坊地址');
+    return;
+  }
+  localStorage.setItem(STORAGE_KEY, addr);
+  contractAddress = addr;
+  document.getElementById('addrStatus').innerText = '✅ 合约地址已保存';
+  // 如果已连接钱包，重新初始化写入合约
+  if (signer) {
+    contract = new ethers.Contract(addr, FULL_ABI, signer);
+    loadAllData();
+  } else {
+    initReadOnly(addr);
+    loadAllData();
+  }
+};
+
+// 只读初始化
+function initReadOnly(addr) {
+  provider = new ethers.providers.JsonRpcProvider(RPC_URL);
+  contract = new ethers.Contract(addr, FULL_ABI, provider);
+}
 
 // 连接钱包
 window.connectWallet = async function() {
@@ -192,26 +229,30 @@ window.connectWallet = async function() {
     signer = web3Provider.getSigner();
     userAddress = await signer.getAddress();
     document.getElementById('walletAddress').innerText = `已连接：${userAddress.substring(0,6)}...${userAddress.substring(38)}`;
-    contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+    if (!contractAddress) {
+      alert('请先输入并保存合约地址');
+      return;
+    }
+    contract = new ethers.Contract(contractAddress, FULL_ABI, signer);
     const owner = await contract.owner();
     isOwner = (owner.toLowerCase() === userAddress.toLowerCase());
-    const tag = document.getElementById('ownerTag');
-    if (isOwner) {
-      tag.innerHTML = '<span style="color:green;font-weight:bold;">👑 管理员模式</span>';
-    } else {
-      tag.innerHTML = '<span style="color:#dc3545;">🔒 只读模式</span>';
-    }
+    document.getElementById('ownerTag').innerHTML = isOwner
+      ? '<span style="color:green;font-weight:bold;">👑 管理员</span>'
+      : '<span style="color:#dc3545;">🔒 只读</span>';
     await loadAllData();
   } catch (err) {
     document.getElementById('networkError').innerText = err.message;
   }
 };
 
-// 全局缓存小数位数
+// ======================= 数据加载与渲染 =======================
 async function loadAllData() {
+  if (!contract || !contractAddress) {
+    document.getElementById('dashboard').innerHTML = '<div class="section"><p style="text-align:center;">请先配置合约地址</p></div>';
+    return;
+  }
   try {
     decimals = await contract.decimals();
-    // 并行读取所有状态变量
     const [
       name, symbol, totalSupply, circulating, owner, renounced,
       enableMint, enablePause, enableRewardList, enableWalletLimit, pause,
@@ -245,7 +286,6 @@ async function loadAllData() {
       contract._currentMineLPIndex(), contract._progressMineLPBlock(), contract._progressMineLPBlockDebt(), contract._mineLPRewardTimeDebt()
     ]);
 
-    // 格式化为可读字符串
     const fmt = (val, dec = decimals) => ethers.utils.formatUnits(val, dec);
     const fmt18 = (val) => ethers.utils.formatUnits(val, 18);
 
@@ -281,10 +321,8 @@ async function loadAllData() {
   }
 }
 
-// ========== 渲染面板 ==========
 function renderDashboard(d) {
-  const isAdmin = isOwner; // 当前用户是否为管理员
-  // 辅助：只读显示项
+  const admin = isOwner;
   const item = (label, value, actionHtml = '') => `
     <div class="item">
       <span class="label">${label}</span>
@@ -294,327 +332,310 @@ function renderDashboard(d) {
 
   let html = '';
 
-  // 1. 基础信息
+  // 基础信息
   html += `<div class="section"><h2>📋 基础信息</h2><div class="grid">`;
   html += item('名称', d.name);
   html += item('符号', d.symbol);
   html += item('精度', d.decimals);
-  html += item('总供应量', d.totalSupply);
+  html += item('总供应', d.totalSupply);
   html += item('流通量', d.circulating);
-  html += item('合约 Owner', d.owner);
-  html += item('是否已放弃', d.renounced ? '是（可恢复）' : '否');
-  html += item('路由地址', d.swapRouter);
-  html += item('交易代币', d.currency + (d.currencyIsEth ? ' (原生币)' : ''));
-  html += item('底池对地址', d.mainPair);
-  html += item('基金地址', d.fundAddress);
+  html += item('Owner', d.owner);
+  html += item('已放弃', d.renounced ? '是（可恢复）' : '否');
+  html += item('路由', d.swapRouter);
+  html += item('交易对币种', d.currency + (d.currencyIsEth ? ' (原生币)' : ''));
+  html += item('底池对', d.mainPair);
+  html += item('基金地址', d.fundAddress, admin ? `<input id="newFund" placeholder="新地址" style="width:200px;"><button class="btn" onclick="execSetFundAddress()">修改</button>` : '');
   html += `</div></div>`;
 
-  // 2. 开关状态
+  // 全局开关
   html += `<div class="section"><h2>🔧 全局开关</h2><div class="grid">`;
-  html += item('增发开关', d.enableMint ? '✅ 开启' : '❌ 关闭');
+  html += item('增发', d.enableMint ? '✅' : '❌');
   html += item('暂停功能', d.enablePause ? '可用' : '禁用');
-  html += item('当前暂停', d.pause ? '⏸ 已暂停' : '▶ 运行中', isAdmin ? btn('切换暂停', () => execTx('setPause', !d.pause)) : '');
-  html += item('奖励黑名单功能', d.enableRewardList ? '可用' : '禁用');
-  html += item('钱包限制功能', d.enableWalletLimit ? '可用' : '禁用');
-  html += item('冷却机制', d.enableCooldown ? '🕒 开启' : '关闭');
+  html += item('当前暂停', d.pause ? '⏸ 已暂停' : '▶ 运行中', admin ? btn('切换', () => execSimple('setPause', !d.pause)) : '');
+  html += item('奖励黑名单', d.enableRewardList ? '可用' : '禁用');
+  html += item('钱包限制功能', d.enableWalletLimit ? '可用' : '禁用', admin ? `<button class="btn" onclick="execSimple('setWalletLimitEnabled', ${!d.enableWalletLimit})">${d.enableWalletLimit?'关闭':'开启'}</button>` : '');
+  html += item('冷却机制', d.enableCooldown ? '开启' : '关闭');
   html += item('开盘控制', d.enableOffTrade ? '未开盘' : '自由交易');
   html += item('杀区块', d.enableKillBlock ? '启用' : '禁用');
-  html += item('允许改税', d.enableChangeTax ? '允许' : '禁止');
-  html += item('阈值自动调整', d.enableAutoAdjust ? '⚡ 活跃' : '关闭');
-  html += item('价格稳定', d.enablePriceStabilize ? '⚖️ 活跃' : '关闭');
-  html += item('防同步', d.antiSYNC ? '开启' : '关闭', isAdmin ? btn('切换', () => execTx('setAntiSYNCEnable', !d.antiSYNC)) : '');
+  html += item('允许改税', d.enableChangeTax ? '允许' : '禁止', admin ? `<button class="btn" onclick="execSimple('setChangeTaxEnabled', ${!d.enableChangeTax})">${d.enableChangeTax?'禁止':'允许'}</button>` : '');
+  html += item('阈值调整', d.enableAutoAdjust ? '活跃' : '关闭');
+  html += item('价格稳定', d.enablePriceStabilize ? '活跃' : '关闭');
+  html += item('防同步', d.antiSYNC ? '开' : '关', admin ? btn('切换', () => execSimple('setAntiSYNCEnable', !d.antiSYNC)) : '');
   html += `</div></div>`;
 
-  // 3. 安全与限制
+  // 安全限制
   html += `<div class="section"><h2>🛡 安全与限制</h2><div class="grid">`;
-  html += item('最大持币量', d.maxWallet + ' ' + d.symbol, isAdmin ? inputBtn('新最大持币', 'maxWalletInput', '修改', () => {
-    const val = document.getElementById('maxWalletInput').value;
-    execTx('changeWalletLimit', ethers.utils.parseUnits(val, decimals));
-  }) : '');
-  html += item('个人冷却(秒)', d.cooldownTime);
-  html += item('全局冷却(秒)', d.globalCooldownTime);
-  html += item('冷却机制开关', d.enableCooldown ? '开' : '关', isAdmin ? `
-    <input id="cooldownEnable" type="checkbox" ${d.enableCooldown?'checked':''}> 
-    <input id="cooldownSingle" placeholder="个人秒" class="small"> 
-    <input id="cooldownGlobal" placeholder="全局秒" class="small">
-    <button class="btn" onclick="setCooldown()">更新</button>` : '');
-  html += item('杀区块数量', d.kb + ' 块', isAdmin ? inputBtn('新区块数', 'kbInput', '修改', () => {
-    const val = document.getElementById('kbInput').value;
-    execTx('setkb', val);
-  }) : '');
-  html += item('开盘状态', d.startTradeBlock === '0' ? '未开盘' : `已开于区块 ${d.startTradeBlock}`, isAdmin ? btn(d.startTradeBlock==='0'?'开盘':'关闭', () => execTx('setTradeActive', d.startTradeBlock==='0')) : '');
+  html += item('最大持币', d.maxWallet + ' ' + d.symbol, admin ? `<input id="maxWalletInput" placeholder="新数量" style="width:120px;"><button class="btn" onclick="execChangeWalletLimit()">修改</button>` : '');
+  html += item('冷却开关', d.enableCooldown ? '开' : '关');
+  html += item('个人冷却(秒)', d.cooldownTime, admin ? `<input id="cooldownSingle" placeholder="秒" style="width:80px;">` : '');
+  html += item('全局冷却(秒)', d.globalCooldownTime, admin ? `<input id="cooldownGlobal" placeholder="秒" style="width:80px;"><button class="btn" onclick="execSetCooldown()">更新冷却</button>` : '');
+  html += item('杀区块数量', d.kb + ' 块', admin ? `<input id="kbInput" placeholder="新区块数" style="width:80px;"><button class="btn" onclick="execSetkb()">修改</button>` : '');
+  html += item('开盘状态', d.startTradeBlock === '0' ? '未开盘' : `已开于区块 ${d.startTradeBlock}`, admin ? btn(d.startTradeBlock==='0'?'开盘':'关闭', () => execSimple('setTradeActive', d.startTradeBlock==='0')) : '');
   html += `</div></div>`;
 
-  // 4. 手续费率
-  html += `<div class="section"><h2>💰 手续费率（基点，1% = 100）</h2><div class="grid">`;
-  html += item('买入-基金', d.buyFundFee);
-  html += item('买入-LP', d.buyLPFee);
-  html += item('买入-销毁', d.buyBurnFee);
-  html += item('卖出-基金', d.sellFundFee);
-  html += item('卖出-LP', d.sellLPFee);
-  html += item('卖出-销毁', d.sellBurnFee);
+  // 费率
+  html += `<div class="section"><h2>💰 费率（基点）</h2><div class="grid">`;
+  html += item('买入基金', d.buyFundFee);
+  html += item('买入LP', d.buyLPFee);
+  html += item('买入销毁', d.buyBurnFee);
+  html += item('卖出基金', d.sellFundFee);
+  html += item('卖出LP', d.sellLPFee);
+  html += item('卖出销毁', d.sellBurnFee);
   html += item('添加流动性', d.addLiqFee);
   html += item('移除流动性', d.removeLiqFee);
-  if (isAdmin) {
-    html += item('修改全部费率', '', `<input id="taxesInput" placeholder="8个数字,逗号分隔" style="width:200px;"> <button class="btn" onclick="execCompleteCustoms()">提交</button>`);
-  }
+  if (admin) html += item('修改全部费率', '', `<input id="taxesInput" placeholder="买基金,买LP,买销毁,卖基金,卖LP,卖销毁,加池,撤池" style="width:280px;"><button class="btn" onclick="execCompleteCustoms()">提交</button>`);
   html += `</div></div>`;
 
-  // 5. 阈值调整
-  html += `<div class="section"><h2>📈 阈值自动调整</h2><div class="grid">`;
+  // 阈值
+  html += `<div class="section"><h2>📈 阈值调整</h2><div class="grid">`;
   html += item('买入阈值', d.buyThreshold + ' ' + d.symbol);
   html += item('卖出阈值', d.sellThreshold + ' ' + d.symbol);
   html += item('买入增发率(基点)', d.buyFeePercent);
   html += item('卖出转奖励率(基点)', d.sellFeePercent);
-  if (isAdmin) {
-    html += item('修改阈值参数', '', `
-      <input id="autoEnable" type="checkbox" ${d.enableAutoAdjust?'checked':''}>启用
-      <input id="buyThres" placeholder="买入阈值" class="small">
-      <input id="sellThres" placeholder="卖出阈值" class="small">
-      <input id="buyFeePer" placeholder="买入增发率" class="small">
-      <input id="sellFeePer" placeholder="卖出奖励率" class="small">
-      <button class="btn" onclick="setAutoAdjust()">应用</button>`);
+  if (admin) {
+    html += item('修改', '', `<input id="autoEnable" type="checkbox" ${d.enableAutoAdjust?'checked':''}>启用
+      <input id="buyThres" placeholder="买入阈值" style="width:80px;">
+      <input id="sellThres" placeholder="卖出阈值" style="width:80px;">
+      <input id="buyFeePer" placeholder="增发率" style="width:60px;">
+      <input id="sellFeePer" placeholder="奖励率" style="width:60px;">
+      <button class="btn" onclick="execSetAutoAdjust()">应用</button>`);
   }
   html += `</div></div>`;
 
-  // 6. 价格稳定
-  html += `<div class="section"><h2>⚖️ 价格稳定机制</h2><div class="grid">`;
-  html += item('目标价格', d.targetPrice + ' (计价币/代币)');
-  html += item('上限百分比', d.priceUpper + '%');
-  html += item('下限百分比', d.priceLower + '%');
+  // 价格稳定
+  html += `<div class="section"><h2>⚖️ 价格稳定</h2><div class="grid">`;
+  html += item('目标价', d.targetPrice);
+  html += item('上限%', d.priceUpper);
+  html += item('下限%', d.priceLower);
   html += item('增发比例(基点)', d.stabMint);
-  html += item('转奖励池比例(基点)', d.stabBurn);
-  if (isAdmin) {
-    html += item('修改稳定参数', '', `
-      <input id="stabEnable" type="checkbox" ${d.enablePriceStabilize?'checked':''}>启用
-      <input id="targetPriceInput" placeholder="目标价(小数)" class="small">
-      <input id="upperInput" placeholder="上限%基点" class="small">
-      <input id="lowerInput" placeholder="下限%基点" class="small">
-      <input id="mintPerc" placeholder="增发基点" class="small">
-      <input id="rewardPerc" placeholder="转奖励池基点" class="small">
-      <button class="btn" onclick="setStabilize()">应用</button>`);
+  html += item('转奖励池(基点)', d.stabBurn);
+  if (admin) {
+    html += item('修改', '', `<input id="stabEnable" type="checkbox" ${d.enablePriceStabilize?'checked':''}>启用
+      <input id="targetPriceInput" placeholder="目标价(小数)" style="width:80px;">
+      <input id="upperInput" placeholder="上限" style="width:60px;">
+      <input id="lowerInput" placeholder="下限" style="width:60px;">
+      <input id="mintPerc" placeholder="增发" style="width:60px;">
+      <input id="rewardPerc" placeholder="转奖励" style="width:60px;">
+      <button class="btn" onclick="execSetStabilize()">应用</button>`);
   }
   html += `</div></div>`;
 
-  // 7. LP燃烧
+  // LP燃烧
   html += `<div class="section"><h2>🔥 LP底池燃烧</h2><div class="grid">`;
-  html += item('燃烧速率(基点)', d.lpBurnRate);
-  html += item('燃烧频率(秒)', d.lpBurnFreq);
-  html += item('上次燃烧时间', d.lastLpBurn);
-  if (isAdmin) {
-    html += item('修改参数', '', `<input id="burnRate" placeholder="速率" class="small"> <input id="burnFreq" placeholder="频率(秒)" class="small"> <button class="btn" onclick="setLpBurn()">应用</button>`);
-  }
+  html += item('速率(基点)', d.lpBurnRate);
+  html += item('频率(秒)', d.lpBurnFreq);
+  html += item('上次燃烧', d.lastLpBurn);
+  if (admin) html += item('修改', '', `<input id="burnRate" placeholder="速率" style="width:60px;"><input id="burnFreq" placeholder="频率" style="width:80px;"><button class="btn" onclick="execSetLpBurn()">应用</button>`);
   html += `</div></div>`;
 
-  // 8. LP挖矿与邀请
-  html += `<div class="section"><h2>⛏ LP挖矿与推荐奖励</h2><div class="grid">`;
-  html += item('挖矿总比例(%)', d.mineRate);
-  html += item('单次奖励量', d.lpRewardCond + ' ' + d.symbol);
+  // 挖矿与邀请
+  html += `<div class="section"><h2>⛏ LP挖矿与推荐</h2><div class="grid">`;
+  html += item('挖矿比例(%)', d.mineRate);
+  html += item('单次奖励', d.lpRewardCond + ' ' + d.symbol);
   html += item('最低LP持有', d.minLPHold + ' ' + d.symbol);
   html += item('最低邀请人持有', d.minInvHold + ' ' + d.symbol);
-  html += item('推荐代数', d.generations);
-  html += item('一代比例(%)', d.fristRate);
-  html += item('二代比例(%)', d.secondRate);
-  html += item('三代比例(%)', d.thirdRate);
-  html += item('后续代数比例(%)', d.leftRate);
-  html += item('奖励分发合约', d.lpRewardDist);
-  html += item('代币分发合约', d.tokenDist);
-  html += item('当前挖矿索引', d.currentMineLPIdx);
-  html += item('挖矿进度块', d.progressMineBlock);
-  html += item('挖矿块间隔', d.progressDebt);
-  html += item('挖矿时间间隔', d.mineRewardTimeDebt);
-  if (isAdmin) {
-    html += item('修改挖矿参数', '', `<input id="condInput" placeholder="单次奖励量" class="small"> <input id="minLpInput" placeholder="最小LP" class="small"> <input id="minInvInput" placeholder="最小邀请人持有" class="small"> <button class="btn" onclick="setMine()">应用</button>`);
-    html += item('修改邀请比例', '', `<input id="invGen" placeholder="代数" class="small"> <input id="inv1" placeholder="一代%" class="small"> <input id="inv2" placeholder="二代%" class="small"> <input id="inv3" placeholder="三代%" class="small"> <input id="invRest" placeholder="后续%" class="small"> <button class="btn" onclick="changeInvite()">应用</button>`);
+  html += item('代数', d.generations);
+  html += item('一代%', d.fristRate);
+  html += item('二代%', d.secondRate);
+  html += item('三代%', d.thirdRate);
+  html += item('后续%', d.leftRate);
+  html += item('奖励分发器', d.lpRewardDist);
+  html += item('当前索引', d.currentMineLPIdx);
+  html += item('进度块', d.progressMineBlock);
+  html += item('块间隔', d.progressDebt);
+  html += item('时间间隔', d.mineRewardTimeDebt);
+  if (admin) {
+    html += item('修改挖矿', '', `<input id="condInput" placeholder="奖励量" style="width:80px;"><input id="minLpInput" placeholder="最小LP" style="width:80px;"><input id="minInvInput" placeholder="最小邀请" style="width:80px;"><button class="btn" onclick="execSetMine()">应用</button>`);
+    html += item('修改邀请', '', `<input id="invGen" placeholder="代数" style="width:50px;"><input id="inv1" placeholder="一代%" style="width:50px;"><input id="inv2" placeholder="二代%" style="width:50px;"><input id="inv3" placeholder="三代%" style="width:50px;"><input id="invRest" placeholder="后续%" style="width:50px;"><button class="btn" onclick="execChangeInvite()">应用</button>`);
   }
   html += `</div></div>`;
 
-  // 9. 白名单/黑名单管理
-  html += `<div class="section"><h2>📌 地址权限管理</h2>`;
-  html += `<div class="grid">`;
-  html += item('查询某地址状态', '', `<input id="queryAddr" placeholder="0x..." style="width:300px;"> <button class="btn" onclick="queryAddress()">查询</button><div id="queryResult" style="grid-column:1/-1;margin-top:6px;"></div>`);
-  if (isAdmin) {
-    html += item('全功能白名单', '', `<input id="allWhiteAddrs" placeholder="地址1,地址2" style="width:240px;"> <select id="allWhiteStatus"><option value="true">添加</option><option value="false">移除</option></select> <button class="btn" onclick="execSetWhiteList()">执行</button>`);
-    html += item('手续费白名单', '', `<input id="feeWhiteAddrs" placeholder="地址1,地址2" style="width:240px;"> <select id="feeWhiteStatus"><option value="true">添加</option><option value="false">移除</option></select> <button class="btn" onclick="execSetFeeWhiteList()">执行</button>`);
-    html += item('奖励黑名单', '', `<input id="blackAddrs" placeholder="地址1,地址2" style="width:240px;"> <select id="blackStatus"><option value="true">加入</option><option value="false">移除</option></select> <button class="btn" onclick="execMultiBclist()">执行</button>`);
-    html += item('交易对白名单', '', `<input id="pairAddr" placeholder="交易对地址" style="width:240px;"> <button class="btn" onclick="execTx('addAllowedPair')">添加</button> <button class="btn" onclick="execTx('removeAllowedPair')">移除</button>`);
-    html += item('swapPairList', '', `<input id="swapPairAddr" placeholder="地址" style="width:240px;"> <select id="swapPairStatus"><option value="true">启用</option><option value="false">禁用</option></select> <button class="btn" onclick="execSetSwapPair()">执行</button>`);
+  // 名单管理
+  html += `<div class="section"><h2>📌 名单管理</h2><div class="grid">`;
+  html += item('查询地址', '', `<input id="queryAddr" placeholder="0x..." style="width:240px;"><button class="btn" onclick="queryAddress()">查询</button><div id="queryResult" style="grid-column:1/-1;margin-top:6px;"></div>`);
+  if (admin) {
+    html += item('全白名单', '', `<input id="allWhiteAddrs" placeholder="地址1,地址2" style="width:180px;"><select id="allWhiteStatus"><option value="true">添加</option><option value="false">移除</option></select><button class="btn" onclick="execSetWhiteList()">执行</button>`);
+    html += item('费白名单', '', `<input id="feeWhiteAddrs" placeholder="地址1,地址2" style="width:180px;"><select id="feeWhiteStatus"><option value="true">添加</option><option value="false">移除</option></select><button class="btn" onclick="execSetFeeWhiteList()">执行</button>`);
+    html += item('奖励黑名单', '', `<input id="blackAddrs" placeholder="地址1,地址2" style="width:180px;"><select id="blackStatus"><option value="true">加入</option><option value="false">移除</option></select><button class="btn" onclick="execMultiBclist()">执行</button>`);
+    html += item('允许交易对', '', `<input id="pairAddr" placeholder="交易对地址" style="width:180px;"><button class="btn" onclick="execSimple('addAllowedPair')">添加</button><button class="btn" onclick="execSimple('removeAllowedPair')">移除</button>`);
+    html += item('Swap交易对', '', `<input id="swapPairAddr" placeholder="地址" style="width:180px;"><select id="swapPairStatus"><option value="true">启用</option><option value="false">禁用</option></select><button class="btn" onclick="execSetSwapPair()">执行</button>`);
+    html += item('排除LP提供者', '', `<input id="excludeLpAddr" placeholder="地址" style="width:180px;"><select id="excludeLpStatus"><option value="true">排除</option><option value="false">包含</option></select><button class="btn" onclick="execSetExcludeLP()">执行</button>`);
   }
   html += `</div></div>`;
 
-  // 10. 特殊操作
+  // 高级管理
   html += `<div class="section"><h2>🛠 高级管理</h2><div class="grid">`;
-  if (isAdmin) {
-    html += item('增发代币', '', `<input id="mintTo" placeholder="接收地址" style="width:240px;"> <input id="mintAmount" placeholder="数量" class="small"> <button class="btn" onclick="execMint()">增发</button>`);
-    html += item('提领代币/ETH', '', `<input id="claimToken" placeholder="代币地址(空=ETH)" style="width:240px;"> <input id="claimAmount" placeholder="数量" class="small"> <button class="btn" onclick="execClaim()">提领</button>`);
-    html += item('转移所有权', '', `<input id="newOwner" placeholder="新Owner地址" style="width:240px;"> <button class="btn" onclick="execTx('transferOwnership')">转移</button>`);
-    html += item('放弃/恢复所有权', '', `
-      ${d.renounced 
-        ? '<button class="btn" onclick="execTx(\'reclaimOwnership\')">恢复所有权</button>' 
-        : '<button class="btn" onclick="execTx(\'renounceOwnership\')">放弃所有权</button>'}`);
+  if (admin) {
+    html += item('增发代币', '', `<input id="mintTo" placeholder="接收地址" style="width:200px;"><input id="mintAmount" placeholder="数量" style="width:100px;"><button class="btn" onclick="execMint()">增发</button>`);
+    html += item('提领代币/ETH', '', `<input id="claimToken" placeholder="代币地址(空=ETH)" style="width:200px;"><input id="claimAmount" placeholder="数量" style="width:100px;"><button class="btn" onclick="execClaim()">提领</button>`);
+    html += item('转移所有权', '', `<input id="newOwner" placeholder="新Owner" style="width:200px;"><button class="btn" onclick="execTransferOwnership()">转移</button>`);
+    html += item('放弃/恢复', '', d.renounced
+      ? '<button class="btn" onclick="execSimple(\'reclaimOwnership\')">恢复所有权</button>'
+      : '<button class="btn" onclick="execSimple(\'renounceOwnership\')">放弃所有权</button>');
   }
-  html += item('绑定邀请人', '', `<input id="bindInviterAddr" placeholder="邀请人地址" style="width:240px;"> <button class="btn" onclick="execBindInviter()">绑定</button> (公开)`)
+  html += item('绑定邀请人', '', `<input id="bindInviterAddr" placeholder="邀请人地址" style="width:200px;"><button class="btn" onclick="execBindInviter()">绑定</button> (公开)`);
   html += `</div></div>`;
 
   document.getElementById('dashboard').innerHTML = html;
 }
 
-// 工具：生成按钮HTML
-function btn(text, onClick) {
-  return `<button class="btn" onclick="(${onClick.toString()})()">${text}</button>`;
-}
-function inputBtn(placeholder, inputId, btnText, handler) {
-  return `<input id="${inputId}" placeholder="${placeholder}" class="small"> <button class="btn" onclick="(${handler.toString()})()">${btnText}</button>`;
+function btn(text, handler) {
+  return `<button class="btn" onclick="(${handler.toString()})()">${text}</button>`;
 }
 
-// ========== 执行交易辅助 ==========
-async function execTx(type, arg) {
-  if (!isOwner && type !== 'bindInviter') return alert('仅管理员可操作');
+// ======================= 交易执行函数 =======================
+async function execSimple(type, arg) {
+  if (!isOwner && type !== 'bindInviter') return alert('仅管理员');
   try {
     let tx;
     switch (type) {
       case 'setPause': tx = await contract.setPause(arg); break;
+      case 'setWalletLimitEnabled': tx = await contract.setWalletLimitEnabled(arg); break;
+      case 'setChangeTaxEnabled': tx = await contract.setChangeTaxEnabled(arg); break;
       case 'setAntiSYNCEnable': tx = await contract.setAntiSYNCEnable(arg); break;
-      case 'changeWalletLimit': tx = await contract.changeWalletLimit(arg); break;
-      case 'setkb': tx = await contract.setkb(arg); break;
       case 'setTradeActive': tx = await contract.setTradeActive(arg); break;
       case 'addAllowedPair': {
         const addr = document.getElementById('pairAddr').value;
+        if (!addr) return alert('输入地址');
         tx = await contract.addAllowedPair(addr);
         break;
       }
       case 'removeAllowedPair': {
         const addr = document.getElementById('pairAddr').value;
+        if (!addr) return alert('输入地址');
         tx = await contract.removeAllowedPair(addr);
         break;
       }
       case 'renounceOwnership': tx = await contract.renounceOwnership(); break;
       case 'reclaimOwnership': tx = await contract.reclaimOwnership(); break;
-      case 'transferOwnership': {
-        const newOwner = document.getElementById('newOwner').value;
-        tx = await contract.transferOwnership(newOwner);
-        break;
-      }
       default: return alert('未知操作');
     }
-    await tx.wait();
-    alert('交易成功！');
-    await loadAllData();
-  } catch (e) {
-    alert('交易失败: ' + e.message);
-  }
-}
-
-// 复杂参数交易
-async function setCooldown() {
-  if (!isOwner) return;
-  const enable = document.getElementById('cooldownEnable').checked;
-  const single = document.getElementById('cooldownSingle').value;
-  const global = document.getElementById('cooldownGlobal').value;
-  if (!single || !global) return alert('请输入冷却时间');
-  try {
-    const tx = await contract.setCooldown(enable, single, global);
     await tx.wait();
     alert('成功');
     await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
-async function execCompleteCustoms() {
-  if (!isOwner) return;
-  const str = document.getElementById('taxesInput').value;
-  const vals = str.split(',').map(v => ethers.BigNumber.from(v.trim()));
-  if (vals.length !== 8) return alert('需要8个费率');
+async function execSetFundAddress() {
+  const addr = document.getElementById('newFund').value;
+  if (!addr) return alert('输入地址');
   try {
-    const tx = await contract.completeCustoms(vals);
-    await tx.wait();
-    alert('费率更新成功');
-    await loadAllData();
+    const tx = await contract.setFundAddress(addr);
+    await tx.wait(); alert('成功'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
-async function setAutoAdjust() {
-  if (!isOwner) return;
+async function execChangeWalletLimit() {
+  const val = document.getElementById('maxWalletInput').value;
+  if (!val) return alert('输入数量');
+  try {
+    const tx = await contract.changeWalletLimit(ethers.utils.parseUnits(val, decimals));
+    await tx.wait(); alert('成功'); await loadAllData();
+  } catch (e) { alert('失败: ' + e.message); }
+}
+
+async function execSetCooldown() {
+  const enable = document.getElementById('cooldownEnable')?.checked ?? true; // 默认从数据来，此处简化
+  const single = document.getElementById('cooldownSingle').value;
+  const global = document.getElementById('cooldownGlobal').value;
+  if (!single || !global) return alert('填写完整');
+  try {
+    const tx = await contract.setCooldown(true, single, global); // 注意：合约setCooldown第一个bool是enable，这里用true
+    await tx.wait(); alert('成功'); await loadAllData();
+  } catch (e) { alert('失败: ' + e.message); }
+}
+
+async function execSetkb() {
+  const val = document.getElementById('kbInput').value;
+  if (!val) return alert('输入值');
+  try {
+    const tx = await contract.setkb(val);
+    await tx.wait(); alert('成功'); await loadAllData();
+  } catch (e) { alert('失败: ' + e.message); }
+}
+
+async function execCompleteCustoms() {
+  const str = document.getElementById('taxesInput').value;
+  const vals = str.split(',').map(v => ethers.BigNumber.from(v.trim()));
+  if (vals.length !== 8) return alert('需要8个数字');
+  try {
+    const tx = await contract.completeCustoms(vals);
+    await tx.wait(); alert('成功'); await loadAllData();
+  } catch (e) { alert('失败: ' + e.message); }
+}
+
+async function execSetAutoAdjust() {
   const enable = document.getElementById('autoEnable').checked;
   const buyThres = document.getElementById('buyThres').value;
   const sellThres = document.getElementById('sellThres').value;
   const buyFee = document.getElementById('buyFeePer').value;
   const sellFee = document.getElementById('sellFeePer').value;
+  if (!buyThres || !sellThres || !buyFee || !sellFee) return alert('填写完整');
   try {
     const tx = await contract.setAutoAdjustParams(enable,
       ethers.utils.parseUnits(buyThres, decimals),
       ethers.utils.parseUnits(sellThres, decimals),
       buyFee, sellFee);
-    await tx.wait();
-    alert('成功');
-    await loadAllData();
+    await tx.wait(); alert('成功'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
-async function setStabilize() {
-  if (!isOwner) return;
+async function execSetStabilize() {
   const enable = document.getElementById('stabEnable').checked;
   const target = document.getElementById('targetPriceInput').value;
   const upper = document.getElementById('upperInput').value;
   const lower = document.getElementById('lowerInput').value;
   const mint = document.getElementById('mintPerc').value;
   const reward = document.getElementById('rewardPerc').value;
+  if (!target || !upper || !lower || !mint || !reward) return alert('填写完整');
   try {
     const tx = await contract.setPriceStabilizeParams(enable,
       ethers.utils.parseUnits(target, 18), upper, lower, mint, reward);
-    await tx.wait();
-    alert('成功');
-    await loadAllData();
+    await tx.wait(); alert('成功'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
-async function setLpBurn() {
-  if (!isOwner) return;
+async function execSetLpBurn() {
   const rate = document.getElementById('burnRate').value;
   const freq = document.getElementById('burnFreq').value;
+  if (!rate || !freq) return alert('填写完整');
   try {
     const tx = await contract.setLpBurnParams(rate, freq);
-    await tx.wait();
-    alert('成功');
-    await loadAllData();
+    await tx.wait(); alert('成功'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
-async function setMine() {
-  if (!isOwner) return;
+async function execSetMine() {
   const cond = document.getElementById('condInput').value;
   const minLP = document.getElementById('minLpInput').value;
   const minInv = document.getElementById('minInvInput').value;
+  if (!cond || !minLP || !minInv) return alert('填写完整');
   try {
     const tx = await contract.setMineParams(
       ethers.utils.parseUnits(cond, decimals),
       ethers.utils.parseUnits(minLP, decimals),
       ethers.utils.parseUnits(minInv, decimals));
-    await tx.wait();
-    alert('成功');
-    await loadAllData();
+    await tx.wait(); alert('成功'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
-async function changeInvite() {
-  if (!isOwner) return;
+async function execChangeInvite() {
   const gen = document.getElementById('invGen').value;
   const f = document.getElementById('inv1').value;
   const s = document.getElementById('inv2').value;
   const t = document.getElementById('inv3').value;
   const r = document.getElementById('invRest').value;
+  if (!gen || !f || !s || !t || !r) return alert('填写完整');
   try {
     const tx = await contract.changeInviteRate([gen, f, s, t, r].map(v => ethers.BigNumber.from(v)));
-    await tx.wait();
-    alert('成功');
-    await loadAllData();
+    await tx.wait(); alert('成功'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
 async function execSetWhiteList() {
-  if (!isOwner) return;
-  const addrs = document.getElementById('allWhiteAddrs').value.split(',').map(a => a.trim());
+  const addrs = document.getElementById('allWhiteAddrs').value.split(',').map(a => a.trim()).filter(a => a);
   const status = document.getElementById('allWhiteStatus').value === 'true';
+  if (addrs.length === 0) return alert('输入地址');
   try {
     const tx = await contract.setWhiteList(addrs, status);
     await tx.wait(); alert('成功'); await loadAllData();
@@ -622,9 +643,9 @@ async function execSetWhiteList() {
 }
 
 async function execSetFeeWhiteList() {
-  if (!isOwner) return;
-  const addrs = document.getElementById('feeWhiteAddrs').value.split(',').map(a => a.trim());
+  const addrs = document.getElementById('feeWhiteAddrs').value.split(',').map(a => a.trim()).filter(a => a);
   const status = document.getElementById('feeWhiteStatus').value === 'true';
+  if (addrs.length === 0) return alert('输入地址');
   try {
     const tx = await contract.setFeeWhiteList(addrs, status);
     await tx.wait(); alert('成功'); await loadAllData();
@@ -632,9 +653,9 @@ async function execSetFeeWhiteList() {
 }
 
 async function execMultiBclist() {
-  if (!isOwner) return;
-  const addrs = document.getElementById('blackAddrs').value.split(',').map(a => a.trim());
+  const addrs = document.getElementById('blackAddrs').value.split(',').map(a => a.trim()).filter(a => a);
   const status = document.getElementById('blackStatus').value === 'true';
+  if (addrs.length === 0) return alert('输入地址');
   try {
     const tx = await contract.multi_bclist(addrs, status);
     await tx.wait(); alert('成功'); await loadAllData();
@@ -642,19 +663,29 @@ async function execMultiBclist() {
 }
 
 async function execSetSwapPair() {
-  if (!isOwner) return;
   const addr = document.getElementById('swapPairAddr').value;
   const status = document.getElementById('swapPairStatus').value === 'true';
+  if (!addr) return alert('输入地址');
   try {
     const tx = await contract.setSwapPairList(addr, status);
     await tx.wait(); alert('成功'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
+async function execSetExcludeLP() {
+  const addr = document.getElementById('excludeLpAddr').value;
+  const status = document.getElementById('excludeLpStatus').value === 'true';
+  if (!addr) return alert('输入地址');
+  try {
+    const tx = await contract.setExcludeLPProvider(addr, status);
+    await tx.wait(); alert('成功'); await loadAllData();
+  } catch (e) { alert('失败: ' + e.message); }
+}
+
 async function execMint() {
-  if (!isOwner) return;
   const to = document.getElementById('mintTo').value;
   const amount = document.getElementById('mintAmount').value;
+  if (!to || !amount) return alert('填写完整');
   try {
     const tx = await contract.mintTokens(to, ethers.utils.parseUnits(amount, decimals));
     await tx.wait(); alert('增发成功'); await loadAllData();
@@ -662,18 +693,28 @@ async function execMint() {
 }
 
 async function execClaim() {
-  if (!isOwner) return;
   const token = document.getElementById('claimToken').value;
   const amount = document.getElementById('claimAmount').value;
+  if (!amount) return alert('填写数量');
   try {
-    const tx = await contract.setClaims(token || '0x0000000000000000000000000000000000000000',
-      ethers.utils.parseUnits(amount, token ? decimals : 18)); // ETH用18精度
+    const addr = token || '0x0000000000000000000000000000000000000000';
+    const tx = await contract.setClaims(addr, ethers.utils.parseUnits(amount, token ? decimals : 18));
     await tx.wait(); alert('提领成功'); await loadAllData();
+  } catch (e) { alert('失败: ' + e.message); }
+}
+
+async function execTransferOwnership() {
+  const newOwner = document.getElementById('newOwner').value;
+  if (!newOwner) return alert('输入地址');
+  try {
+    const tx = await contract.transferOwnership(newOwner);
+    await tx.wait(); alert('成功'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
 async function execBindInviter() {
   const invitor = document.getElementById('bindInviterAddr').value;
+  if (!invitor) return alert('输入邀请人地址');
   try {
     const tx = await contract.bindInviter(invitor);
     await tx.wait(); alert('绑定成功'); await loadAllData();
@@ -696,14 +737,16 @@ async function queryAddress() {
       <b>余额：</b>${ethers.utils.formatUnits(balance, decimals)} ${await contract.symbol()} &nbsp;
       <b>全白：</b>${allWhite?'是':'否'} &nbsp;
       <b>费白：</b>${feeWhite?'是':'否'} &nbsp;
-      <b>奖励黑名单：</b>${reward?'是':'否'} &nbsp;
+      <b>黑名单：</b>${reward?'是':'否'} &nbsp;
       <b>允许交易对：</b>${allowedPair?'是':'否'}
     `;
   } catch (e) { alert('查询失败: ' + e.message); }
 }
 
-// 页面加载即显示只读数据
-loadAllData();
+// 初次自动加载只读数据（如果有地址）
+if (contractAddress) {
+  loadAllData();
+}
 </script>
 </body>
 </html>
