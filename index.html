@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PandaToken 控制面板</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
+    .container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    h1 { text-align: center; color: #333; }
+    .section { margin: 30px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #fafafa; }
+    .section h2 { margin-top: 0; color: #555; border-bottom: 2px solid #ccc; padding-bottom: 5px; }
+    .row { display: flex; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+    .label { font-weight: bold; width: 200px; color: #444; }
+    .value { color: #222; margin-right: 20px; word-break: break-all; }
+    input, button { padding: 5px 10px; margin: 3px; font-size: 14px; }
+    button { cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+    button:hover { background: #0056b3; }
+    .error { color: red; font-size: 14px; margin-top: 5px; }
+    .success { color: green; font-size: 14px; margin-top: 5px; }
+    .address-input { width: 350px; }
+    .small-input { width: 120px; }
+    hr { margin: 15px 0; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🐼 PandaToken 操作面板</h1>
+  <div style="text-align:center;">
+    <button id="connectWallet">连接钱包</button>
+    <span id="walletAddress" style="margin-left:15px;"></span>
+    <span id="isOwner" style="margin-left:10px; font-weight:bold;"></span>
+    <span id="networkError" class="error"></span>
+  </div>
+
+  <!-- 这里会动态插入所有section -->
+  <div id="dashboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+<script>
+// ================= 请在这里修改为你的配置 =================
+const CONTRACT_ADDRESS = '0x你的合约地址';
+const CHAIN_ID = 56;            // 56=BSC主网, 97=BSC测试网, 1=以太坊主网
+const RPC_URL = 'https://bsc-dataseed.binance.org/'; // 你的RPC节点
+// =========================================================
+
+// 合约ABI（包含所有需要读取和调用的函数）
+const CONTRACT_ABI = [
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint256)",
+  "function totalSupply() view returns (uint256)",
+  "function balanceOf(address) view returns (uint256)",
+  "function getCirculatingSupply() view returns (uint256)",
+  "function owner() view returns (address)",
+  "function renounced() view returns (bool)",
+  "function enableMint() view returns (bool)",
+  "function enablePause() view returns (bool)",
+  "function enableRewardList() view returns (bool)",
+  "function enableWalletLimit() view returns (bool)",
+  "function pause() view returns (bool)",
+  "function maxWalletAmount() view returns (uint256)",
+  "function enableCooldown() view returns (bool)",
+  "function cooldownTime() view returns (uint256)",
+  "function globalCooldownTime() view returns (uint256)",
+  "function enableOffTrade() view returns (bool)",
+  "function enableKillBlock() view returns (bool)",
+  "function kb() view returns (uint256)",
+  "function startTradeBlock() view returns (uint256)",
+  "function currency() view returns (address)",
+  "function currencyIsEth() view returns (bool)",
+  "function _mainPair() view returns (address)",
+  "function fundAddress() view returns (address)",
+  "function _buyFundFee() view returns (uint256)",
+  "function _buyLPFee() view returns (uint256)",
+  "function buy_burnFee() view returns (uint256)",
+  "function _sellFundFee() view returns (uint256)",
+  "function _sellLPFee() view returns (uint256)",
+  "function sell_burnFee() view returns (uint256)",
+  "function addLiquidityFee() view returns (uint256)",
+  "function removeLiquidityFee() view returns (uint256)",
+  "function enableChangeTax() view returns (bool)",
+  "function enableAutoAdjust() view returns (bool)",
+  "function buyThreshold() view returns (uint256)",
+  "function sellThreshold() view returns (uint256)",
+  "function buyFeePercent() view returns (uint256)",
+  "function sellFeePercent() view returns (uint256)",
+  "function enablePriceStabilize() view returns (bool)",
+  "function targetPrice() view returns (uint256)",
+  "function priceUpperPercent() view returns (uint256)",
+  "function priceLowerPercent() view returns (uint256)",
+  "function stabilizeMintPercent() view returns (uint256)",
+  "function stabilizeBurnPercent() view returns (uint256)",
+  "function lpBurnRate() view returns (uint256)",
+  "function lpBurnFrequency() view returns (uint256)",
+  "function lastLpBurnTime() view returns (uint256)",
+  "function mineRate() view returns (uint256)",
+  "function LPRewardCondition() view returns (uint256)",
+  "function minLPHoldAmount() view returns (uint256)",
+  "function minInvitorHoldAmount() view returns (uint256)",
+  "function generations() view returns (uint256)",
+  "function fristRate() view returns (uint256)",
+  "function secondRate() view returns (uint256)",
+  "function thirdRate() view returns (uint256)",
+  "function leftRate() view returns (uint256)",
+  "function antiSYNC() view returns (bool)",
+  "function _allWhiteList(address) view returns (bool)",
+  "function _feeWhiteList(address) view returns (bool)",
+  "function _rewardList(address) view returns (bool)",
+  "function allowedPairs(address) view returns (bool)",
+  "function _swapPairList(address) view returns (bool)",
+  "function _inviter(address) view returns (address)",
+  "function _tokenDistributor() view returns (address)",
+  "function _LPRewardDistributor() view returns (address)",
+  "function lpProviders(uint256) view returns (address)",
+  "function excludeLpProvider(address) view returns (bool)",
+  "function _userLPAmount(address) view returns (uint256)",
+  "function _lastMineLPRewardTimes(address) view returns (uint256)",
+  "function _currentMineLPIndex() view returns (uint256)",
+  "function _progressMineLPBlock() view returns (uint256)",
+  "function _progressMineLPBlockDebt() view returns (uint256)",
+  "function _mineLPRewardTimeDebt() view returns (uint256)",
+  "function getBinderLength(address) view returns (uint256)",
+
+  // Owner修改函数
+  "function setWhiteList(address[] calldata, bool)",
+  "function setFeeWhiteList(address[] calldata, bool)",
+  "function multi_bclist(address[] calldata, bool)",
+  "function setPause(bool)",
+  "function setWalletLimitEnabled(bool)",
+  "function changeWalletLimit(uint256)",
+  "function setTradeActive(bool)",
+  "function addAllowedPair(address)",
+  "function removeAllowedPair(address)",
+  "function setSwapPairList(address, bool)",
+  "function setFundAddress(address)",
+  "function setCooldown(bool, uint256, uint256)",
+  "function setPriceStabilizeParams(bool, uint256, uint256, uint256, uint256, uint256)",
+  "function setAutoAdjustParams(bool, uint256, uint256, uint256, uint256)",
+  "function completeCustoms(uint256[] calldata)",
+  "function setChangeTaxEnabled(bool)",
+  "function setMineParams(uint256, uint256, uint256)",
+  "function setExcludeLPProvider(address, bool)",
+  "function setLpBurnParams(uint256, uint256)",
+  "function changeInviteRate(uint256[] calldata)",
+  "function setAntiSYNCEnable(bool)",
+  "function setkb(uint256)",
+  "function mintTokens(address, uint256)",
+  "function setClaims(address, uint256)"
+];
+
+let provider, signer, contract, userAddress, isOwner = false;
+
+// 初始化只读provider
+provider = new ethers.providers.JsonRpcProvider(RPC_URL);
+contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+
+// ========== 钱包连接 ==========
+document.getElementById('connectWallet').addEventListener('click', async () => {
+  try {
+    if (!window.ethereum) throw new Error('请安装MetaMask');
+    await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+    const network = await web3Provider.getNetwork();
+    if (network.chainId !== CHAIN_ID) {
+      document.getElementById('networkError').innerText = `请切换到链ID ${CHAIN_ID}`;
+      return;
+    }
+    document.getElementById('networkError').innerText = '';
+    signer = web3Provider.getSigner();
+    userAddress = await signer.getAddress();
+    document.getElementById('walletAddress').innerText = `已连接: ${userAddress}`;
+    contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+    const owner = await contract.owner();
+    isOwner = (owner.toLowerCase() === userAddress.toLowerCase());
+    document.getElementById('isOwner').innerHTML = isOwner ? '👑 管理员' : '🔒 普通用户';
+    document.getElementById('isOwner').style.color = isOwner ? 'green' : 'red';
+    await loadAllData();
+  } catch (err) {
+    document.getElementById('networkError').innerText = err.message;
+  }
+});
+
+// ========== 加载所有数据并渲染 ==========
+async function loadAllData() {
+  const data = {};
+  try {
+    data.name = await contract.name();
+    data.symbol = await contract.symbol();
+    data.decimals = (await contract.decimals()).toString();
+    data.totalSupply = ethers.utils.formatUnits(await contract.totalSupply(), data.decimals);
+    data.circulating = ethers.utils.formatUnits(await contract.getCirculatingSupply(), data.decimals);
+    data.owner = await contract.owner();
+    data.renounced = await contract.renounced();
+
+    // 开关类
+    data.enableMint = await contract.enableMint();
+    data.enablePause = await contract.enablePause();
+    data.enableRewardList = await contract.enableRewardList();
+    data.enableWalletLimit = await contract.enableWalletLimit();
+    data.pause = await contract.pause();
+    data.enableCooldown = await contract.enableCooldown();
+    data.enableOffTrade = await contract.enableOffTrade();
+    data.enableKillBlock = await contract.enableKillBlock();
+    data.enableChangeTax = await contract.enableChangeTax();
+    data.enableAutoAdjust = await contract.enableAutoAdjust();
+    data.enablePriceStabilize = await contract.enablePriceStabilize();
+    data.antiSYNC = await contract.antiSYNC();
+
+    // 数值
+    data.maxWalletAmount = ethers.utils.formatUnits(await contract.maxWalletAmount(), data.decimals);
+    data.cooldownTime = (await contract.cooldownTime()).toString();
+    data.globalCooldownTime = (await contract.globalCooldownTime()).toString();
+    data.kb = (await contract.kb()).toString();
+    data.startTradeBlock = (await contract.startTradeBlock()).toString();
+    data.currency = await contract.currency();
+    data.currencyIsEth = await contract.currencyIsEth();
+    data.mainPair = await contract._mainPair();
+    data.fundAddress = await contract.fundAddress();
+
+    // 税费
+    data.buyFundFee = (await contract._buyFundFee()).toString();
+    data.buyLPFee = (await contract._buyLPFee()).toString();
+    data.buyBurnFee = (await contract.buy_burnFee()).toString();
+    data.sellFundFee = (await contract._sellFundFee()).toString();
+    data.sellLPFee = (await contract._sellLPFee()).toString();
+    data.sellBurnFee = (await contract.sell_burnFee()).toString();
+    data.addLiquidityFee = (await contract.addLiquidityFee()).toString();
+    data.removeLiquidityFee = (await contract.removeLiquidityFee()).toString();
+
+    // 阈值/稳定
+    data.buyThreshold = ethers.utils.formatUnits(await contract.buyThreshold(), data.decimals);
+    data.sellThreshold = ethers.utils.formatUnits(await contract.sellThreshold(), data.decimals);
+    data.buyFeePercent = (await contract.buyFeePercent()).toString();
+    data.sellFeePercent = (await contract.sellFeePercent()).toString();
+    data.targetPrice = ethers.utils.formatUnits(await contract.targetPrice(), 18);
+    data.priceUpperPercent = (await contract.priceUpperPercent()).toString();
+    data.priceLowerPercent = (await contract.priceLowerPercent()).toString();
+    data.stabilizeMintPercent = (await contract.stabilizeMintPercent()).toString();
+    data.stabilizeBurnPercent = (await contract.stabilizeBurnPercent()).toString();
+
+    // LP燃烧
+    data.lpBurnRate = (await contract.lpBurnRate()).toString();
+    data.lpBurnFrequency = (await contract.lpBurnFrequency()).toString();
+    data.lastLpBurnTime = new Date((await contract.lastLpBurnTime())*1000).toLocaleString();
+
+    // 挖矿
+    data.mineRate = (await contract.mineRate()).toString();
+    data.LPRewardCondition = ethers.utils.formatUnits(await contract.LPRewardCondition(), data.decimals);
+    data.minLPHoldAmount = ethers.utils.formatUnits(await contract.minLPHoldAmount(), data.decimals);
+    data.minInvitorHoldAmount = ethers.utils.formatUnits(await contract.minInvitorHoldAmount(), data.decimals);
+    data.generations = (await contract.generations()).toString();
+    data.fristRate = (await contract.fristRate()).toString();
+    data.secondRate = (await contract.secondRate()).toString();
+    data.thirdRate = (await contract.thirdRate()).toString();
+    data.leftRate = (await contract.leftRate()).toString();
+
+    data.tokenDistributor = await contract._tokenDistributor();
+    data.LPRewardDistributor = await contract._LPRewardDistributor();
+    data.currentMineLPIndex = (await contract._currentMineLPIndex()).toString();
+    data.progressMineLPBlock = (await contract._progressMineLPBlock()).toString();
+    data.progressMineLPBlockDebt = (await contract._progressMineLPBlockDebt()).toString();
+    data.mineLPRewardTimeDebt = ((await contract._mineLPRewardTimeDebt())/3600).toFixed(1) + ' 小时';
+
+    // 显示
+    renderDashboard(data);
+  } catch (e) {
+    console.error(e);
+    alert('加载数据失败: ' + e.message);
+  }
+}
+
+// ========== 渲染面板 ==========
+function renderDashboard(d) {
+  let html = '';
+
+  // 基础信息
+  html += `<div class="section"><h2>📋 基础信息</h2>`;
+  html += row('名称', d.name);
+  html += row('符号', d.symbol);
+  html += row('精度', d.decimals);
+  html += row('总供应', d.totalSupply);
+  html += row('流通量', d.circulating);
+  html += row('Owner', d.owner);
+  html += row('已放弃', d.renounced ? '是' : '否');
+  html += `</div>`;
+
+  // 开关状态
+  html += `<div class="section"><h2>🔧 全局开关</h2>`;
+  html += row('增发', d.enableMint, isOwner ? `<button onclick="execTx('setMintEnabled', !${d.enableMint})">切换</button>` : '');
+  html += row('暂停功能', d.enablePause);
+  html += row('当前暂停', d.pause, isOwner ? `<button onclick="execTx('setPause', !${d.pause})">${d.pause?'恢复':'暂停'}</button>` : '');
+  html += row('奖励黑名单', d.enableRewardList);
+  html += row('钱包限制', d.enableWalletLimit);
+  html += row('冷却机制', d.enableCooldown);
+  html += row('开盘控制', d.enableOffTrade);
+  html += row('杀区块', d.enableKillBlock);
+  html += row('允许改税', d.enableChangeTax);
+  html += row('阈值调整', d.enableAutoAdjust);
+  html += row('价格稳定', d.enablePriceStabilize);
+  html += row('防同步', d.antiSYNC, isOwner ? `<button onclick="execTx('setAntiSYNCEnable', ${!d.antiSYNC})">切换</button>` : '');
+  html += `</div>`;
+
+  // 安全参数
+  html += `<div class="section"><h2>🛡 安全与限制</h2>`;
+  html += row('最大持币', d.maxWalletAmount, isOwner ? `<input class="small-input" id="newMaxWallet" placeholder="数量"> <button onclick="execTx('changeWalletLimit')">修改</button>` : '');
+  html += row('个人冷却(秒)', d.cooldownTime);
+  html += row('全局冷却(秒)', d.globalCooldownTime);
+  html += row('杀区块数', d.kb, isOwner ? `<input class="small-input" id="newkb" placeholder="kb"> <button onclick="execTx('setkb')">修改</button>` : '');
+  html += row('开盘高度', d.startTradeBlock == '0' ? '未开盘' : d.startTradeBlock, isOwner ? `<button onclick="execTx('setTradeActive', ${d.startTradeBlock == '0'})">${d.startTradeBlock == '0'?'开盘':'关闭'}</button>` : '');
+  html += row('底池对地址', d.mainPair);
+  html += row('基金地址', d.fundAddress, isOwner ? `<input class="address-input" id="newFund" placeholder="新地址"> <button onclick="execTx('setFundAddress')">修改</button>` : '');
+  html += `</div>`;
+
+  // 税费
+  html += `<div class="section"><h2>💰 费率（基点）</h2>`;
+  html += row('买入基金', d.buyFundFee);
+  html += row('买入LP', d.buyLPFee);
+  html += row('买入销毁', d.buyBurnFee);
+  html += row('卖出基金', d.sellFundFee);
+  html += row('卖出LP', d.sellLPFee);
+  html += row('卖出销毁', d.sellBurnFee);
+  html += row('添加流动性', d.addLiquidityFee);
+  html += row('移除流动性', d.removeLiquidityFee);
+  if (isOwner) html += `<button onclick="document.getElementById('taxForm').style.display='block'">修改税率</button>
+    <div id="taxForm" style="display:none; margin-top:10px;">
+      依次输入8个费率(逗号分隔): <input id="taxInput" placeholder="买基金,买LP,买销毁,卖基金,卖LP,卖销毁,加池,撤池">
+      <button onclick="execTx('completeCustoms')">提交</button>
+    </div>`;
+  html += `</div>`;
+
+  // 阈值与稳定
+  html += `<div class="section"><h2>📊 阈值与价格稳定</h2>`;
+  html += row('买入阈值', d.buyThreshold);
+  html += row('卖出阈值', d.sellThreshold);
+  html += row('买入增发率(基点)', d.buyFeePercent);
+  html += row('卖出奖励率(基点)', d.sellFeePercent);
+  html += row('目标价格(每币)', d.targetPrice);
+  html += row('价格上限%', d.priceUpperPercent);
+  html += row('价格下限%', d.priceLowerPercent);
+  html += row('增发比例(基点)', d.stabilizeMintPercent);
+  html += row('转奖励池比例(基点)', d.stabilizeBurnPercent);
+  if (isOwner) html += `<button onclick="execTx('setAutoAdjustParams')">应用阈值设置</button> <button onclick="execTx('setPriceStabilizeParams')">应用价格稳定设置</button>`;
+  html += `</div>`;
+
+  // LP燃烧
+  html += `<div class="section"><h2>🔥 LP底池燃烧</h2>`;
+  html += row('燃烧速率(基点)', d.lpBurnRate);
+  html += row('燃烧频率(秒)', d.lpBurnFrequency);
+  html += row('上次燃烧', d.lastLpBurnTime);
+  if (isOwner) html += `<input class="small-input" id="lpBurnRate" placeholder="速率"> <input class="small-input" id="lpBurnFreq" placeholder="频率"> <button onclick="execTx('setLpBurnParams')">设置</button>`;
+  html += `</div>`;
+
+  // 挖矿与邀请
+  html += `<div class="section"><h2>⛏ LP挖矿与邀请</h2>`;
+  html += row('挖矿比例(%)', d.mineRate);
+  html += row('单次奖励量', d.LPRewardCondition);
+  html += row('最低LP持有', d.minLPHoldAmount);
+  html += row('最低邀请人持有', d.minInvitorHoldAmount);
+  html += row('推荐代数', d.generations);
+  html += row('一代比例(%)', d.fristRate);
+  html += row('二代比例(%)', d.secondRate);
+  html += row('三代比例(%)', d.thirdRate);
+  html += row('其余代数比例(%)', d.leftRate);
+  html += row('奖励分发器', d.LPRewardDistributor);
+  if (isOwner) html += `<button onclick="execTx('setMineParams')">修改挖矿参数</button> <button onclick="execTx('changeInviteRate')">修改邀请比例</button>`;
+  html += `</div>`;
+
+  // 白名单/黑名单查询
+  html += `<div class="section"><h2>📌 地址状态查询</h2>`;
+  html += `<input class="address-input" id="queryAddr" placeholder="输入地址"> <button onclick="queryAddress()">查询</button>
+    <div id="queryResult" style="margin-top:10px;"></div>`;
+  if (isOwner) {
+    html += `<hr><b>批量设置：</b><br>
+      全功能白名单: <input id="allWhiteInput" placeholder="地址,地址" class="address-input"> 状态 <select id="allWhiteStatus"><option value="true">true</option><option value="false">false</option></select>
+      <button onclick="execTx('setWhiteList')">执行</button><br>
+      手续费白名单: <input id="feeWhiteInput" placeholder="地址,地址" class="address-input"> <select id="feeWhiteStatus"><option value="true">true</option><option value="false">false</option></select>
+      <button onclick="execTx('setFeeWhiteList')">执行</button><br>
+      奖励黑名单: <input id="rewardListInput" placeholder="地址,地址" class="address-input"> <select id="rewardListStatus"><option value="true">true</option><option value="false">false</option></select>
+      <button onclick="execTx('multi_bclist')">执行</button>
+    `;
+  }
+  html += `</div>`;
+
+  document.getElementById('dashboard').innerHTML = html;
+}
+
+function row(label, value, action = '') {
+  return `<div class="row"><span class="label">${label}:</span> <span class="value">${value}</span> ${action}</div>`;
+}
+
+// 查询单个地址的各名单状态
+async function queryAddress() {
+  const addr = document.getElementById('queryAddr').value.trim();
+  if (!ethers.utils.isAddress(addr)) return alert('无效地址');
+  const allWhite = await contract._allWhiteList(addr);
+  const feeWhite = await contract._feeWhiteList(addr);
+  const reward = await contract._rewardList(addr);
+  const allowedPair = await contract.allowedPairs(addr);
+  const balance = ethers.utils.formatUnits(await contract.balanceOf(addr), await contract.decimals());
+  document.getElementById('queryResult').innerHTML = `
+    余额: ${balance} | 全白: ${allWhite} | 费白: ${feeWhite} | 黑名单: ${reward} | 允许交易对: ${allowedPair}
+  `;
+}
+
+// 通用交易执行
+async function execTx(func, arg = null) {
+  if (!isOwner) return alert('仅管理员可操作');
+  try {
+    let tx;
+    switch (func) {
+      case 'setPause': tx = await contract.setPause(arg); break;
+      case 'setAntiSYNCEnable': tx = await contract.setAntiSYNCEnable(arg); break;
+      case 'setMintEnabled': alert('无直接函数，可通过 enableMint 合约无setter，需调用mintTokens或自定义，请直接使用完整合约ABI'); return;
+      case 'changeWalletLimit': {
+        const val = document.getElementById('newMaxWallet').value;
+        tx = await contract.changeWalletLimit(ethers.utils.parseUnits(val, await contract.decimals()));
+        break;
+      }
+      case 'setkb': {
+        const val = document.getElementById('newkb').value;
+        tx = await contract.setkb(val);
+        break;
+      }
+      case 'setTradeActive': {
+        tx = await contract.setTradeActive(arg);
+        break;
+      }
+      case 'setFundAddress': {
+        const addr = document.getElementById('newFund').value;
+        tx = await contract.setFundAddress(addr);
+        break;
+      }
+      case 'completeCustoms': {
+        const vals = document.getElementById('taxInput').value.split(',').map(v=>v.trim());
+        if (vals.length !== 8) return alert('需要8个数字');
+        tx = await contract.completeCustoms(vals);
+        break;
+      }
+      case 'setAutoAdjustParams': {
+        // 这里简化：弹窗让用户输入
+        const enable = prompt('是否启用阈值调整 (true/false)');
+        const buyThres = prompt('买入阈值(代币数量)');
+        const sellThres = prompt('卖出阈值(代币数量)');
+        const buyFee = prompt('买入增发率(基点)');
+        const sellFee = prompt('卖出奖励率(基点)');
+        tx = await contract.setAutoAdjustParams(enable==='true', ethers.utils.parseUnits(buyThres, await contract.decimals()), ethers.utils.parseUnits(sellThres, await contract.decimals()), buyFee, sellFee);
+        break;
+      }
+      case 'setPriceStabilizeParams': {
+        const enable = prompt('启用价格稳定 (true/false)');
+        const target = prompt('目标价格 (单位: 1e18 精度)');
+        const upper = prompt('上限百分比 (基点)');
+        const lower = prompt('下限百分比 (基点)');
+        const mint = prompt('增发比例 (基点)');
+        const burn = prompt('转奖励池比例 (基点)');
+        tx = await contract.setPriceStabilizeParams(enable==='true', target, upper, lower, mint, burn);
+        break;
+      }
+      case 'setLpBurnParams': {
+        const rate = document.getElementById('lpBurnRate').value;
+        const freq = document.getElementById('lpBurnFreq').value;
+        tx = await contract.setLpBurnParams(rate, freq);
+        break;
+      }
+      case 'setMineParams': {
+        const cond = prompt('LPRewardCondition (代币数量)');
+        const minLP = prompt('minLPHoldAmount');
+        const minInv = prompt('minInvitorHoldAmount');
+        tx = await contract.setMineParams(ethers.utils.parseUnits(cond, await contract.decimals()), ethers.utils.parseUnits(minLP, await contract.decimals()), ethers.utils.parseUnits(minInv, await contract.decimals()));
+        break;
+      }
+      case 'changeInviteRate': {
+        const gens = prompt('generations');
+        const f = prompt('fristRate(%)');
+        const s = prompt('secondRate(%)');
+        const t = prompt('thirdRate(%)');
+        const l = prompt('leftRate(%)');
+        tx = await contract.changeInviteRate([gens, f, s, t, l]);
+        break;
+      }
+      case 'setWhiteList': {
+        const addrs = document.getElementById('allWhiteInput').value.split(',').map(a => a.trim());
+        const status = document.getElementById('allWhiteStatus').value === 'true';
+        tx = await contract.setWhiteList(addrs, status);
+        break;
+      }
+      case 'setFeeWhiteList': {
+        const addrs = document.getElementById('feeWhiteInput').value.split(',').map(a => a.trim());
+        const status = document.getElementById('feeWhiteStatus').value === 'true';
+        tx = await contract.setFeeWhiteList(addrs, status);
+        break;
+      }
+      case 'multi_bclist': {
+        const addrs = document.getElementById('rewardListInput').value.split(',').map(a => a.trim());
+        const status = document.getElementById('rewardListStatus').value === 'true';
+        tx = await contract.multi_bclist(addrs, status);
+        break;
+      }
+      default: return alert('未知操作');
+    }
+    await tx.wait();
+    alert('交易成功！');
+    await loadAllData(); // 刷新
+  } catch (e) {
+    alert('交易失败: ' + e.message);
+  }
+}
+
+// 页面加载时自动获取一次只读数据
+loadAllData();
+</script>
+</body>
+</html>
