@@ -7,29 +7,31 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Microsoft YaHei', sans-serif; background: #f0f2f5; padding: 20px; }
-    .container { max-width: 1300px; margin: auto; background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); overflow: hidden; }
+    .container { max-width: 1400px; margin: auto; background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); overflow: hidden; }
     .header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 25px; text-align: center; }
     .header h1 { font-size: 28px; letter-spacing: 2px; margin-bottom: 8px; }
-    .addr-bar { display: flex; justify-content: center; align-items: center; gap: 10px; padding: 15px; background: #e8edf2; flex-wrap: wrap; }
-    .addr-bar input { padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px; width: 400px; font-size: 14px; }
-    .wallet-bar { display: flex; justify-content: center; align-items: center; gap: 20px; padding: 15px; background: #dde4ec; }
-    .wallet-bar button { padding: 10px 24px; border: none; background: #2a5298; color: white; border-radius: 8px; font-size: 16px; cursor: pointer; }
-    .wallet-bar button:hover { background: #1e3c72; }
-    .section { margin: 20px; padding: 20px; background: #f9fbfd; border-radius: 12px; border: 1px solid #dee2e6; }
-    .section h2 { margin-bottom: 16px; color: #2a5298; border-left: 5px solid #2a5298; padding-left: 12px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
-    .item { display: flex; align-items: center; background: white; padding: 10px 14px; border-radius: 8px; border: 1px solid #e9ecef; }
-    .label { width: 140px; font-weight: bold; color: #495057; flex-shrink: 0; }
-    .value { flex: 1; color: #212529; word-break: break-all; }
-    .action { flex-shrink: 0; margin-left: 10px; display: flex; gap: 6px; align-items: center; }
-    input[type="text"], input[type="number"] { padding: 6px 10px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px; }
-    select { padding: 6px 10px; border-radius: 6px; border: 1px solid #ced4da; }
-    button.btn { padding: 6px 14px; background: #2a5298; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; white-space: nowrap; }
+    .addr-bar, .wallet-bar { display: flex; justify-content: center; align-items: center; gap: 15px; padding: 15px; background: #e8edf2; flex-wrap: wrap; }
+    .wallet-bar { background: #dde4ec; }
+    .addr-bar input { padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px; width: 420px; max-width: 90vw; font-size: 14px; }
+    button.btn { padding: 8px 18px; background: #2a5298; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; white-space: nowrap; }
     button.btn:hover:not(:disabled) { background: #1e3c72; }
     button.btn:disabled { background: #adb5bd; cursor: not-allowed; }
+    .section { margin: 20px; padding: 20px; background: #f9fbfd; border-radius: 12px; border: 1px solid #dee2e6; }
+    .section h2 { margin-bottom: 16px; color: #2a5298; border-left: 5px solid #2a5298; padding-left: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; }
+    .item { display: flex; align-items: flex-start; background: white; padding: 12px 14px; border-radius: 8px; border: 1px solid #e9ecef; flex-wrap: wrap; }
+    .label { width: 130px; font-weight: bold; color: #495057; flex-shrink: 0; padding-top: 3px; }
+    .value { flex: 1; color: #212529; word-break: break-all; min-width: 120px; padding-top: 3px; }
+    .action { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+    input[type="text"], input[type="number"] { padding: 6px 10px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px; }
+    select { padding: 6px 10px; border-radius: 6px; border: 1px solid #ced4da; }
     .error { color: #dc3545; }
     .success { color: #198754; }
     .status-msg { margin: 8px 0; font-size: 14px; }
+    @media (max-width: 600px) {
+      .grid { grid-template-columns: 1fr; }
+      .label { width: 100px; }
+    }
   </style>
 </head>
 <body>
@@ -41,7 +43,7 @@
   <!-- 合约地址输入与保存 -->
   <div class="addr-bar">
     <span><b>合约地址：</b></span>
-    <input type="text" id="contractAddrInput" placeholder="输入0x合约地址后点击[加载]">
+    <input type="text" id="contractAddrInput" placeholder="输入0x合约地址后点击[保存并加载]">
     <button class="btn" onclick="saveContractAddress()">💾 保存并加载</button>
     <span id="addrStatus" style="font-size:14px;"></span>
   </div>
@@ -61,16 +63,15 @@
 
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 <script>
-// ======================= 全局变量 =======================
+// ======================= 全局配置 =======================
 const CHAIN_ID = 56;                       // 56=BSC主网, 97=BSC测试网
 const RPC_URL = 'https://bsc-dataseed.binance.org/';
-const STORAGE_KEY = 'ccrr_contract_addr';  // localStorage键名
+const STORAGE_KEY = 'ccrr_contract_addr';
 
 let contractAddress = localStorage.getItem(STORAGE_KEY) || '';
 let provider, signer, contract, decimals, userAddress, isOwner = false;
-let currentABI = [];  // 动态加载ABI，这里直接写死完整ABI
 
-// 完整合约ABI（包含所有用到的函数）
+// 完整合约ABI
 const FULL_ABI = [
   "function name() view returns (string)",
   "function symbol() view returns (string)",
@@ -188,6 +189,11 @@ if (contractAddress) {
   document.getElementById('addrStatus').innerText = '⚠️ 未配置合约地址';
 }
 
+function initReadOnly(addr) {
+  provider = new ethers.providers.JsonRpcProvider(RPC_URL);
+  contract = new ethers.Contract(addr, FULL_ABI, provider);
+}
+
 // 保存并加载合约地址
 window.saveContractAddress = function() {
   const addr = document.getElementById('contractAddrInput').value.trim();
@@ -198,7 +204,6 @@ window.saveContractAddress = function() {
   localStorage.setItem(STORAGE_KEY, addr);
   contractAddress = addr;
   document.getElementById('addrStatus').innerText = '✅ 合约地址已保存';
-  // 如果已连接钱包，重新初始化写入合约
   if (signer) {
     contract = new ethers.Contract(addr, FULL_ABI, signer);
     loadAllData();
@@ -207,12 +212,6 @@ window.saveContractAddress = function() {
     loadAllData();
   }
 };
-
-// 只读初始化
-function initReadOnly(addr) {
-  provider = new ethers.providers.JsonRpcProvider(RPC_URL);
-  contract = new ethers.Contract(addr, FULL_ABI, provider);
-}
 
 // 连接钱包
 window.connectWallet = async function() {
@@ -245,7 +244,7 @@ window.connectWallet = async function() {
   }
 };
 
-// ======================= 数据加载与渲染 =======================
+// ======================= 数据加载 =======================
 async function loadAllData() {
   if (!contract || !contractAddress) {
     document.getElementById('dashboard').innerHTML = '<div class="section"><p style="text-align:center;">请先配置合约地址</p></div>';
@@ -321,6 +320,7 @@ async function loadAllData() {
   }
 }
 
+// ======================= 渲染界面 =======================
 function renderDashboard(d) {
   const admin = isOwner;
   const item = (label, value, actionHtml = '') => `
@@ -353,23 +353,26 @@ function renderDashboard(d) {
   html += item('暂停功能', d.enablePause ? '可用' : '禁用');
   html += item('当前暂停', d.pause ? '⏸ 已暂停' : '▶ 运行中', admin ? btn('切换', () => execSimple('setPause', !d.pause)) : '');
   html += item('奖励黑名单', d.enableRewardList ? '可用' : '禁用');
-  html += item('钱包限制功能', d.enableWalletLimit ? '可用' : '禁用', admin ? `<button class="btn" onclick="execSimple('setWalletLimitEnabled', ${!d.enableWalletLimit})">${d.enableWalletLimit?'关闭':'开启'}</button>` : '');
+  html += item('钱包限制功能', d.enableWalletLimit ? '可用' : '禁用', admin ? btn(`${d.enableWalletLimit?'关闭':'开启'}`, () => execSimple('setWalletLimitEnabled', !d.enableWalletLimit)) : '');
   html += item('冷却机制', d.enableCooldown ? '开启' : '关闭');
   html += item('开盘控制', d.enableOffTrade ? '未开盘' : '自由交易');
   html += item('杀区块', d.enableKillBlock ? '启用' : '禁用');
-  html += item('允许改税', d.enableChangeTax ? '允许' : '禁止', admin ? `<button class="btn" onclick="execSimple('setChangeTaxEnabled', ${!d.enableChangeTax})">${d.enableChangeTax?'禁止':'允许'}</button>` : '');
+  html += item('允许改税', d.enableChangeTax ? '允许' : '禁止', admin ? btn(`${d.enableChangeTax?'禁止':'允许'}`, () => execSimple('setChangeTaxEnabled', !d.enableChangeTax)) : '');
   html += item('阈值调整', d.enableAutoAdjust ? '活跃' : '关闭');
   html += item('价格稳定', d.enablePriceStabilize ? '活跃' : '关闭');
   html += item('防同步', d.antiSYNC ? '开' : '关', admin ? btn('切换', () => execSimple('setAntiSYNCEnable', !d.antiSYNC)) : '');
   html += `</div></div>`;
 
-  // 安全限制
+  // 安全与限制
   html += `<div class="section"><h2>🛡 安全与限制</h2><div class="grid">`;
   html += item('最大持币', d.maxWallet + ' ' + d.symbol, admin ? `<input id="maxWalletInput" placeholder="新数量" style="width:120px;"><button class="btn" onclick="execChangeWalletLimit()">修改</button>` : '');
-  html += item('冷却开关', d.enableCooldown ? '开' : '关');
-  html += item('个人冷却(秒)', d.cooldownTime, admin ? `<input id="cooldownSingle" placeholder="秒" style="width:80px;">` : '');
-  html += item('全局冷却(秒)', d.globalCooldownTime, admin ? `<input id="cooldownGlobal" placeholder="秒" style="width:80px;"><button class="btn" onclick="execSetCooldown()">更新冷却</button>` : '');
-  html += item('杀区块数量', d.kb + ' 块', admin ? `<input id="kbInput" placeholder="新区块数" style="width:80px;"><button class="btn" onclick="execSetkb()">修改</button>` : '');
+  // 冷却设置行
+  html += item('冷却设置', '', admin ? `
+    <label><input type="checkbox" id="cooldownEnable" ${d.enableCooldown ? 'checked' : ''}> 启用</label>
+    <input id="cooldownSingle" placeholder="个人秒" style="width:80px;" value="${d.cooldownTime}">
+    <input id="cooldownGlobal" placeholder="全局秒" style="width:80px;" value="${d.globalCooldownTime}">
+    <button class="btn" onclick="execSetCooldown()">更新冷却</button>` : `${d.enableCooldown?'启用':'禁用'} | 个人${d.cooldownTime}秒 | 全局${d.globalCooldownTime}秒`);
+  html += item('杀区块数量', d.kb + ' 块', admin ? `<input id="kbInput" placeholder="新区块数" style="width:80px;" value="${d.kb}"><button class="btn" onclick="execSetkb()">修改</button>` : '');
   html += item('开盘状态', d.startTradeBlock === '0' ? '未开盘' : `已开于区块 ${d.startTradeBlock}`, admin ? btn(d.startTradeBlock==='0'?'开盘':'关闭', () => execSimple('setTradeActive', d.startTradeBlock==='0')) : '');
   html += `</div></div>`;
 
@@ -393,11 +396,12 @@ function renderDashboard(d) {
   html += item('买入增发率(基点)', d.buyFeePercent);
   html += item('卖出转奖励率(基点)', d.sellFeePercent);
   if (admin) {
-    html += item('修改', '', `<input id="autoEnable" type="checkbox" ${d.enableAutoAdjust?'checked':''}>启用
-      <input id="buyThres" placeholder="买入阈值" style="width:80px;">
-      <input id="sellThres" placeholder="卖出阈值" style="width:80px;">
-      <input id="buyFeePer" placeholder="增发率" style="width:60px;">
-      <input id="sellFeePer" placeholder="奖励率" style="width:60px;">
+    html += item('修改参数', '', `
+      <label><input type="checkbox" id="autoEnable" ${d.enableAutoAdjust ? 'checked' : ''}> 启用</label>
+      <input id="buyThres" placeholder="买入阈值" style="width:80px;" value="${d.buyThreshold}">
+      <input id="sellThres" placeholder="卖出阈值" style="width:80px;" value="${d.sellThreshold}">
+      <input id="buyFeePer" placeholder="增发率" style="width:60px;" value="${d.buyFeePercent}">
+      <input id="sellFeePer" placeholder="奖励率" style="width:60px;" value="${d.sellFeePercent}">
       <button class="btn" onclick="execSetAutoAdjust()">应用</button>`);
   }
   html += `</div></div>`;
@@ -410,12 +414,13 @@ function renderDashboard(d) {
   html += item('增发比例(基点)', d.stabMint);
   html += item('转奖励池(基点)', d.stabBurn);
   if (admin) {
-    html += item('修改', '', `<input id="stabEnable" type="checkbox" ${d.enablePriceStabilize?'checked':''}>启用
-      <input id="targetPriceInput" placeholder="目标价(小数)" style="width:80px;">
-      <input id="upperInput" placeholder="上限" style="width:60px;">
-      <input id="lowerInput" placeholder="下限" style="width:60px;">
-      <input id="mintPerc" placeholder="增发" style="width:60px;">
-      <input id="rewardPerc" placeholder="转奖励" style="width:60px;">
+    html += item('修改参数', '', `
+      <label><input type="checkbox" id="stabEnable" ${d.enablePriceStabilize ? 'checked' : ''}> 启用</label>
+      <input id="targetPriceInput" placeholder="目标价(小数)" style="width:80px;" value="${d.targetPrice}">
+      <input id="upperInput" placeholder="上限" style="width:60px;" value="${d.priceUpper}">
+      <input id="lowerInput" placeholder="下限" style="width:60px;" value="${d.priceLower}">
+      <input id="mintPerc" placeholder="增发" style="width:60px;" value="${d.stabMint}">
+      <input id="rewardPerc" placeholder="转奖励" style="width:60px;" value="${d.stabBurn}">
       <button class="btn" onclick="execSetStabilize()">应用</button>`);
   }
   html += `</div></div>`;
@@ -425,7 +430,7 @@ function renderDashboard(d) {
   html += item('速率(基点)', d.lpBurnRate);
   html += item('频率(秒)', d.lpBurnFreq);
   html += item('上次燃烧', d.lastLpBurn);
-  if (admin) html += item('修改', '', `<input id="burnRate" placeholder="速率" style="width:60px;"><input id="burnFreq" placeholder="频率" style="width:80px;"><button class="btn" onclick="execSetLpBurn()">应用</button>`);
+  if (admin) html += item('修改', '', `<input id="burnRate" placeholder="速率" style="width:60px;" value="${d.lpBurnRate}"><input id="burnFreq" placeholder="频率" style="width:80px;" value="${d.lpBurnFreq}"><button class="btn" onclick="execSetLpBurn()">应用</button>`);
   html += `</div></div>`;
 
   // 挖矿与邀请
@@ -445,8 +450,8 @@ function renderDashboard(d) {
   html += item('块间隔', d.progressDebt);
   html += item('时间间隔', d.mineRewardTimeDebt);
   if (admin) {
-    html += item('修改挖矿', '', `<input id="condInput" placeholder="奖励量" style="width:80px;"><input id="minLpInput" placeholder="最小LP" style="width:80px;"><input id="minInvInput" placeholder="最小邀请" style="width:80px;"><button class="btn" onclick="execSetMine()">应用</button>`);
-    html += item('修改邀请', '', `<input id="invGen" placeholder="代数" style="width:50px;"><input id="inv1" placeholder="一代%" style="width:50px;"><input id="inv2" placeholder="二代%" style="width:50px;"><input id="inv3" placeholder="三代%" style="width:50px;"><input id="invRest" placeholder="后续%" style="width:50px;"><button class="btn" onclick="execChangeInvite()">应用</button>`);
+    html += item('修改挖矿参数', '', `<input id="condInput" placeholder="奖励量" style="width:80px;" value="${d.lpRewardCond}"><input id="minLpInput" placeholder="最小LP" style="width:80px;" value="${d.minLPHold}"><input id="minInvInput" placeholder="最小邀请" style="width:80px;" value="${d.minInvHold}"><button class="btn" onclick="execSetMine()">应用</button>`);
+    html += item('修改邀请比例', '', `<input id="invGen" placeholder="代数" style="width:50px;" value="${d.generations}"><input id="inv1" placeholder="一代%" style="width:50px;" value="${d.fristRate}"><input id="inv2" placeholder="二代%" style="width:50px;" value="${d.secondRate}"><input id="inv3" placeholder="三代%" style="width:50px;" value="${d.thirdRate}"><input id="invRest" placeholder="后续%" style="width:50px;" value="${d.leftRate}"><button class="btn" onclick="execChangeInvite()">应用</button>`);
   }
   html += `</div></div>`;
 
@@ -479,13 +484,14 @@ function renderDashboard(d) {
   document.getElementById('dashboard').innerHTML = html;
 }
 
+// 工具按钮生成
 function btn(text, handler) {
   return `<button class="btn" onclick="(${handler.toString()})()">${text}</button>`;
 }
 
 // ======================= 交易执行函数 =======================
 async function execSimple(type, arg) {
-  if (!isOwner && type !== 'bindInviter') return alert('仅管理员');
+  if (!isOwner && type !== 'bindInviter') return alert('仅管理员可操作');
   try {
     let tx;
     switch (type) {
@@ -511,9 +517,9 @@ async function execSimple(type, arg) {
       default: return alert('未知操作');
     }
     await tx.wait();
-    alert('成功');
+    alert('操作成功！');
     await loadAllData();
-  } catch (e) { alert('失败: ' + e.message); }
+  } catch (e) { alert('交易失败: ' + e.message); }
 }
 
 async function execSetFundAddress() {
@@ -521,7 +527,7 @@ async function execSetFundAddress() {
   if (!addr) return alert('输入地址');
   try {
     const tx = await contract.setFundAddress(addr);
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('基金地址已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
@@ -530,37 +536,37 @@ async function execChangeWalletLimit() {
   if (!val) return alert('输入数量');
   try {
     const tx = await contract.changeWalletLimit(ethers.utils.parseUnits(val, decimals));
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('最大持币已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
 async function execSetCooldown() {
-  const enable = document.getElementById('cooldownEnable')?.checked ?? true; // 默认从数据来，此处简化
+  const enable = document.getElementById('cooldownEnable').checked;
   const single = document.getElementById('cooldownSingle').value;
   const global = document.getElementById('cooldownGlobal').value;
-  if (!single || !global) return alert('填写完整');
+  if (!single || !global) return alert('请填写冷却时间');
   try {
-    const tx = await contract.setCooldown(true, single, global); // 注意：合约setCooldown第一个bool是enable，这里用true
-    await tx.wait(); alert('成功'); await loadAllData();
+    const tx = await contract.setCooldown(enable, single, global);
+    await tx.wait(); alert('冷却参数已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
 async function execSetkb() {
   const val = document.getElementById('kbInput').value;
-  if (!val) return alert('输入值');
+  if (!val) return alert('输入数值');
   try {
     const tx = await contract.setkb(val);
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('杀区块已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
 async function execCompleteCustoms() {
   const str = document.getElementById('taxesInput').value;
   const vals = str.split(',').map(v => ethers.BigNumber.from(v.trim()));
-  if (vals.length !== 8) return alert('需要8个数字');
+  if (vals.length !== 8) return alert('需要8个数字，用逗号分隔');
   try {
     const tx = await contract.completeCustoms(vals);
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('费率已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
@@ -570,13 +576,13 @@ async function execSetAutoAdjust() {
   const sellThres = document.getElementById('sellThres').value;
   const buyFee = document.getElementById('buyFeePer').value;
   const sellFee = document.getElementById('sellFeePer').value;
-  if (!buyThres || !sellThres || !buyFee || !sellFee) return alert('填写完整');
+  if (!buyThres || !sellThres || !buyFee || !sellFee) return alert('请完整填写');
   try {
     const tx = await contract.setAutoAdjustParams(enable,
       ethers.utils.parseUnits(buyThres, decimals),
       ethers.utils.parseUnits(sellThres, decimals),
       buyFee, sellFee);
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('阈值参数已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
@@ -587,21 +593,21 @@ async function execSetStabilize() {
   const lower = document.getElementById('lowerInput').value;
   const mint = document.getElementById('mintPerc').value;
   const reward = document.getElementById('rewardPerc').value;
-  if (!target || !upper || !lower || !mint || !reward) return alert('填写完整');
+  if (!target || !upper || !lower || !mint || !reward) return alert('请完整填写');
   try {
     const tx = await contract.setPriceStabilizeParams(enable,
       ethers.utils.parseUnits(target, 18), upper, lower, mint, reward);
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('价格稳定参数已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
 async function execSetLpBurn() {
   const rate = document.getElementById('burnRate').value;
   const freq = document.getElementById('burnFreq').value;
-  if (!rate || !freq) return alert('填写完整');
+  if (!rate || !freq) return alert('请完整填写');
   try {
     const tx = await contract.setLpBurnParams(rate, freq);
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('LP燃烧参数已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
@@ -609,13 +615,13 @@ async function execSetMine() {
   const cond = document.getElementById('condInput').value;
   const minLP = document.getElementById('minLpInput').value;
   const minInv = document.getElementById('minInvInput').value;
-  if (!cond || !minLP || !minInv) return alert('填写完整');
+  if (!cond || !minLP || !minInv) return alert('请完整填写');
   try {
     const tx = await contract.setMineParams(
       ethers.utils.parseUnits(cond, decimals),
       ethers.utils.parseUnits(minLP, decimals),
       ethers.utils.parseUnits(minInv, decimals));
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('挖矿参数已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
@@ -625,10 +631,10 @@ async function execChangeInvite() {
   const s = document.getElementById('inv2').value;
   const t = document.getElementById('inv3').value;
   const r = document.getElementById('invRest').value;
-  if (!gen || !f || !s || !t || !r) return alert('填写完整');
+  if (!gen || !f || !s || !t || !r) return alert('请完整填写');
   try {
     const tx = await contract.changeInviteRate([gen, f, s, t, r].map(v => ethers.BigNumber.from(v)));
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('邀请比例已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
@@ -638,7 +644,7 @@ async function execSetWhiteList() {
   if (addrs.length === 0) return alert('输入地址');
   try {
     const tx = await contract.setWhiteList(addrs, status);
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('全白名单已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
@@ -648,7 +654,7 @@ async function execSetFeeWhiteList() {
   if (addrs.length === 0) return alert('输入地址');
   try {
     const tx = await contract.setFeeWhiteList(addrs, status);
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('费白名单已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
@@ -658,7 +664,7 @@ async function execMultiBclist() {
   if (addrs.length === 0) return alert('输入地址');
   try {
     const tx = await contract.multi_bclist(addrs, status);
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('黑名单已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
@@ -668,7 +674,7 @@ async function execSetSwapPair() {
   if (!addr) return alert('输入地址');
   try {
     const tx = await contract.setSwapPairList(addr, status);
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('Swap交易对已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
@@ -678,14 +684,14 @@ async function execSetExcludeLP() {
   if (!addr) return alert('输入地址');
   try {
     const tx = await contract.setExcludeLPProvider(addr, status);
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('LP提供者排除状态已更新'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
 async function execMint() {
   const to = document.getElementById('mintTo').value;
   const amount = document.getElementById('mintAmount').value;
-  if (!to || !amount) return alert('填写完整');
+  if (!to || !amount) return alert('填写接收地址和数量');
   try {
     const tx = await contract.mintTokens(to, ethers.utils.parseUnits(amount, decimals));
     await tx.wait(); alert('增发成功'); await loadAllData();
@@ -705,10 +711,10 @@ async function execClaim() {
 
 async function execTransferOwnership() {
   const newOwner = document.getElementById('newOwner').value;
-  if (!newOwner) return alert('输入地址');
+  if (!newOwner) return alert('输入新Owner地址');
   try {
     const tx = await contract.transferOwnership(newOwner);
-    await tx.wait(); alert('成功'); await loadAllData();
+    await tx.wait(); alert('所有权转移成功'); await loadAllData();
   } catch (e) { alert('失败: ' + e.message); }
 }
 
@@ -733,8 +739,9 @@ async function queryAddress() {
       contract.allowedPairs(addr),
       contract.balanceOf(addr)
     ]);
+    const sym = await contract.symbol();
     document.getElementById('queryResult').innerHTML = `
-      <b>余额：</b>${ethers.utils.formatUnits(balance, decimals)} ${await contract.symbol()} &nbsp;
+      <b>余额：</b>${ethers.utils.formatUnits(balance, decimals)} ${sym} &nbsp;
       <b>全白：</b>${allWhite?'是':'否'} &nbsp;
       <b>费白：</b>${feeWhite?'是':'否'} &nbsp;
       <b>黑名单：</b>${reward?'是':'否'} &nbsp;
@@ -743,7 +750,7 @@ async function queryAddress() {
   } catch (e) { alert('查询失败: ' + e.message); }
 }
 
-// 初次自动加载只读数据（如果有地址）
+// 自动加载只读数据
 if (contractAddress) {
   loadAllData();
 }
