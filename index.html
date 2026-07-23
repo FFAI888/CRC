@@ -3,53 +3,78 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CCCRRRCCC代币控制面板 v1.0</title>
+  <title>CCCRRRCCC代币控制面板 v1.1</title>
   <!-- Ant Design 样式 -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@5.12.8/dist/reset.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@5.12.8/dist/antd.min.css">
   <style>
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     .layout { min-height: 100vh; }
-    .header { display: flex; align-items: center; gap: 16px; padding: 0 24px; background: #001529; }
+    .header { display: flex; align-items: center; gap: 16px; padding: 0 24px; background: #001529; flex-wrap: wrap; }
     .header h1 { color: white; margin: 0; font-size: 18px; white-space: nowrap; }
-    .content { padding: 24px; background: #fff; overflow: auto; }
+    .content { padding: 24px; background: #fff; overflow: auto; min-height: calc(100vh - 64px - 70px); }
+    .error-boundary { padding: 24px; color: red; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
-  <!-- 引入依赖 -->
+  <!-- 依赖 -->
   <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <!-- dayjs (Ant Design 5 必需) -->
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/antd@5.12.8/dist/antd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.9/babel.min.js"></script>
 
-  <!-- 合约 ABI 定义（请将完整的 ABI 替换到下方的 abiJson 变量中） -->
   <script type="text/babel">
-    // ===================== 合约 ABI 区域（必须完整粘贴） =====================
-    const PandaTokenABI = [/* 请将完整的合约ABI粘贴到这里 */];
-
-    // ===================== 工具函数 =====================
-    const { useState, useEffect, useCallback } = React;
+    const { useState, useEffect, useCallback, useRef } = React;
     const { ethers } = window;
     const {
       Layout, Menu, Input, Button, Space, message, Descriptions, Spin,
-      Form, InputNumber, Switch, Select, Radio, Statistic, Alert, Tooltip
+      Form, InputNumber, Switch, Select, Radio, Statistic, Alert, Tooltip, Modal
     } = antd;
     const { Header, Content, Footer } = Layout;
 
-    // 自定义 Hook：管理合约连接
-    function usePandaContract(contractAddress) {
+    // ===================== 合约 ABI（务必替换为你的完整 ABI） =====================
+    const PandaTokenABI = [/* 请将完整的合约ABI粘贴到这里 */];
+
+    // ===================== 错误边界 =====================
+    class ErrorBoundary extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+      }
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+      render() {
+        if (this.state.hasError) {
+          return (
+            <div className="error-boundary">
+              <h2>控制面板运行出错</h2>
+              <pre>{this.state.error?.message || '未知错误'}</pre>
+              <Button onClick={() => this.setState({ hasError: false })}>重试</Button>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
+
+    // ===================== 自定义 Hook =====================
+    function usePandaContract(contractAddress, abi) {
       const [provider, setProvider] = useState(null);
       const [signer, setSigner] = useState(null);
       const [contract, setContract] = useState(null);
       const [readOnlyContract, setReadOnlyContract] = useState(null);
       const [account, setAccount] = useState(null);
       const [isOwner, setIsOwner] = useState(false);
+      const [abiError, setAbiError] = useState(null);
 
       const connectWallet = useCallback(async () => {
-        if (!window.ethereum) { alert('请安装 MetaMask'); return; }
+        if (!window.ethereum) { message.error('请安装 MetaMask'); return; }
         const web3Provider = new ethers.BrowserProvider(window.ethereum);
         const accounts = await web3Provider.send("eth_requestAccounts", []);
         const signer = await web3Provider.getSigner();
@@ -61,14 +86,24 @@
       }, []);
 
       useEffect(() => {
-        if (!provider || !contractAddress) return;
-        const readC = new ethers.Contract(contractAddress, PandaTokenABI, provider);
-        setReadOnlyContract(readC);
-        if (signer) {
-          const writeC = new ethers.Contract(contractAddress, PandaTokenABI, signer);
-          setContract(writeC);
+        if (!provider || !contractAddress || !abi || abi.length === 0) {
+          setReadOnlyContract(null);
+          setContract(null);
+          setAbiError(abi && abi.length === 0 ? 'ABI 为空，请先粘贴合约 ABI' : null);
+          return;
         }
-      }, [provider, signer, contractAddress]);
+        try {
+          const readC = new ethers.Contract(contractAddress, abi, provider);
+          setReadOnlyContract(readC);
+          if (signer) {
+            const writeC = new ethers.Contract(contractAddress, abi, signer);
+            setContract(writeC);
+          }
+          setAbiError(null);
+        } catch (e) {
+          setAbiError('合约初始化失败: ' + e.message);
+        }
+      }, [provider, signer, contractAddress, abi]);
 
       useEffect(() => {
         if (!readOnlyContract || !account) return;
@@ -77,17 +112,17 @@
         }).catch(() => setIsOwner(false));
       }, [readOnlyContract, account]);
 
-      return { provider, signer, contract, readOnlyContract, account, isOwner, connectWallet };
+      return { provider, signer, contract, readOnlyContract, account, isOwner, connectWallet, abiError };
     }
 
-    // 所有者守卫组件
+    // ===================== 所有者守卫 =====================
     function OwnerGuard({ isOwner, children }) {
       if (!isOwner) return <Alert message="您不是合约所有者，仅可查看数据" type="info" showIcon />;
       return children;
     }
 
-    // ===================== 基础信息组件 =====================
-    function BasicInfo({ readOnlyContract, account, isOwner, contract }) {
+    // ===================== 基础信息 =====================
+    function BasicInfo({ readOnlyContract, account, isOwner, contract, refreshKey }) {
       const [data, setData] = useState({});
       const [loading, setLoading] = useState(false);
       const [checkAddress, setCheckAddress] = useState('');
@@ -97,12 +132,9 @@
         if (!readOnlyContract) return;
         setLoading(true);
         try {
-          const [
-            name, symbol, decimals, totalSupply, circulating,
-            owner, fundAddress, deadAddress, startTradeBlock, pause,
-            antiSYNC, enableMint, enablePause, enableRewardList,
-            enableWalletLimit, enableOffTrade, enableKillBlock,
-            enableChangeTax, airdropEnable
+          const [name, symbol, decimals, totalSupply, circulating, owner, fundAddress, deadAddress,
+            startTradeBlock, pause, antiSYNC, enableMint, enablePause, enableRewardList,
+            enableWalletLimit, enableOffTrade, enableKillBlock, enableChangeTax, airdropEnable
           ] = await Promise.all([
             readOnlyContract.name(), readOnlyContract.symbol(), readOnlyContract.decimals(),
             readOnlyContract.totalSupply(), readOnlyContract.getCirculatingSupply(),
@@ -121,30 +153,34 @@
             enableMint, enablePause, enableRewardList, enableWalletLimit,
             enableOffTrade, enableKillBlock, enableChangeTax, airdropEnable
           });
-        } catch (e) { console.error(e); }
+        } catch (e) {
+          message.error('获取基础信息失败: ' + e.message);
+        }
         setLoading(false);
       };
 
-      useEffect(() => { fetchData(); }, [readOnlyContract]);
+      useEffect(() => { fetchData(); }, [readOnlyContract, refreshKey]);
 
       const handleCheckBalance = async () => {
         if (!ethers.isAddress(checkAddress)) return;
-        const bal = await readOnlyContract.balanceOf(checkAddress);
-        setBalance(ethers.formatUnits(bal, data.decimals || 18));
+        try {
+          const bal = await readOnlyContract.balanceOf(checkAddress);
+          setBalance(ethers.formatUnits(bal, data.decimals || 18));
+        } catch (e) { message.error('查询余额失败'); }
       };
 
       return (
         <Spin spinning={loading}>
           <Descriptions title="基础信息" bordered column={2} size="small">
-            <Descriptions.Item label="代币名称">{data.name}</Descriptions.Item>
-            <Descriptions.Item label="代币符号">{data.symbol}</Descriptions.Item>
-            <Descriptions.Item label="小数位">{data.decimals}</Descriptions.Item>
-            <Descriptions.Item label="总供应量">{data.totalSupply}</Descriptions.Item>
-            <Descriptions.Item label="流通量">{data.circulating}</Descriptions.Item>
-            <Descriptions.Item label="合约所有者">{data.owner}</Descriptions.Item>
-            <Descriptions.Item label="基金地址">{data.fundAddress}</Descriptions.Item>
-            <Descriptions.Item label="黑洞地址">{data.deadAddress}</Descriptions.Item>
-            <Descriptions.Item label="开盘区块">{data.startTradeBlock}</Descriptions.Item>
+            <Descriptions.Item label="代币名称">{data.name || '-'}</Descriptions.Item>
+            <Descriptions.Item label="代币符号">{data.symbol || '-'}</Descriptions.Item>
+            <Descriptions.Item label="小数位">{data.decimals || '-'}</Descriptions.Item>
+            <Descriptions.Item label="总供应量">{data.totalSupply || '-'}</Descriptions.Item>
+            <Descriptions.Item label="流通量">{data.circulating || '-'}</Descriptions.Item>
+            <Descriptions.Item label="合约所有者">{data.owner || '-'}</Descriptions.Item>
+            <Descriptions.Item label="基金地址">{data.fundAddress || '-'}</Descriptions.Item>
+            <Descriptions.Item label="黑洞地址">{data.deadAddress || '-'}</Descriptions.Item>
+            <Descriptions.Item label="开盘区块">{data.startTradeBlock || '-'}</Descriptions.Item>
             <Descriptions.Item label="交易暂停中">{data.pause ? '是' : '否'}</Descriptions.Item>
             <Descriptions.Item label="防同步">{data.antiSYNC ? '开启' : '关闭'}</Descriptions.Item>
             <Descriptions.Item label="公售铸造开关">{data.enableMint ? '开启' : '关闭'}</Descriptions.Item>
@@ -161,13 +197,17 @@
             <Button onClick={handleCheckBalance}>查询余额</Button>
             {balance !== null && <span>余额: {balance}</span>}
           </div>
-          {isOwner && <Button onClick={() => contract.launch()} style={{ marginTop: 16 }}>开盘（startTradeBlock 为0时可用）</Button>}
+          {isOwner && (
+            <Button onClick={async () => { try { await (await contract.launch()).wait(); message.success('开盘成功'); fetchData(); } catch(e) { message.error('开盘失败: ' + e.message); } }} style={{ marginTop: 16 }}>
+              开盘（仅当startTradeBlock为0时可用）
+            </Button>
+          )}
         </Spin>
       );
     }
 
-    // ===================== 税率设置组件 =====================
-    function TaxSettings({ readOnlyContract, contract, isOwner }) {
+    // ===================== 税率设置 =====================
+    function TaxSettings({ readOnlyContract, contract, isOwner, refreshKey }) {
       const [loading, setLoading] = useState(false);
       const [rates, setRates] = useState({});
       const [form] = Form.useForm();
@@ -176,22 +216,30 @@
         if (!readOnlyContract) return;
         setLoading(true);
         try {
-          // 注意：内部函数无法直接调用，这里假设合约暴露了 public getter
           const [buyFund, buyLP, buyBurn, sellFund, sellLP, sellBurn, addLiq, removeLiq] = await Promise.all([
-            readOnlyContract._buyFundFee(), readOnlyContract._buyLPFee(), readOnlyContract._buyBurnFee(),
-            readOnlyContract._sellFundFee(), readOnlyContract._sellLPFee(), readOnlyContract._sellBurnFee(),
-            readOnlyContract._addLiquidityFee(), readOnlyContract._removeLiquidityFee()
+            readOnlyContract._buyFundFee().catch(() => 0),
+            readOnlyContract._buyLPFee().catch(() => 0),
+            readOnlyContract._buyBurnFee().catch(() => 0),
+            readOnlyContract._sellFundFee().catch(() => 0),
+            readOnlyContract._sellLPFee().catch(() => 0),
+            readOnlyContract._sellBurnFee().catch(() => 0),
+            readOnlyContract._addLiquidityFee().catch(() => 0),
+            readOnlyContract._removeLiquidityFee().catch(() => 0)
           ]);
-          const r = { buyFund: Number(buyFund), buyLP: Number(buyLP), buyBurn: Number(buyBurn),
+          const r = {
+            buyFund: Number(buyFund), buyLP: Number(buyLP), buyBurn: Number(buyBurn),
             sellFund: Number(sellFund), sellLP: Number(sellLP), sellBurn: Number(sellBurn),
-            addLiq: Number(addLiq), removeLiq: Number(removeLiq) };
+            addLiq: Number(addLiq), removeLiq: Number(removeLiq)
+          };
           setRates(r);
           form.setFieldsValue(r);
-        } catch (e) { console.error(e); }
+        } catch (e) {
+          message.error('获取税率失败，可能是ABI不含内部getter，请确认合约已暴露这些函数');
+        }
         setLoading(false);
       };
 
-      useEffect(() => { fetchRates(); }, [readOnlyContract]);
+      useEffect(() => { fetchRates(); }, [readOnlyContract, refreshKey]);
 
       const onFinish = async (values) => {
         try {
@@ -199,8 +247,14 @@
           const customs = [values.buyFund, values.buyLP, values.buyBurn, values.sellFund, values.sellLP, values.sellBurn];
           const tx = await c.completeCustoms(customs);
           await tx.wait();
-          if (values.addLiq !== rates.addLiq) { const tx2 = await c.setAddLiquidityFee(values.addLiq); await tx2.wait(); }
-          if (values.removeLiq !== rates.removeLiq) { const tx3 = await c.setRemoveLiquidityFee(values.removeLiq); await tx3.wait(); }
+          if (values.addLiq !== rates.addLiq) {
+            const tx2 = await c.setAddLiquidityFee(values.addLiq);
+            await tx2.wait();
+          }
+          if (values.removeLiq !== rates.removeLiq) {
+            const tx3 = await c.setRemoveLiquidityFee(values.removeLiq);
+            await tx3.wait();
+          }
           message.success('税率修改成功');
           fetchRates();
         } catch (e) { message.error('修改失败: ' + e.message); }
@@ -225,8 +279,8 @@
       );
     }
 
-    // ===================== 限额与开关组件 =====================
-    function LimitAndSwitches({ readOnlyContract, contract, isOwner }) {
+    // ===================== 限额与开关 =====================
+    function LimitAndSwitches({ readOnlyContract, contract, isOwner, refreshKey }) {
       const [loading, setLoading] = useState(false);
       const [form] = Form.useForm();
 
@@ -238,22 +292,24 @@
             readOnlyContract.maxWalletAmount(), readOnlyContract.numTokensSellRate(), readOnlyContract.kb(),
             readOnlyContract.airdropNumbs(), readOnlyContract.pause(), readOnlyContract.antiSYNC(), readOnlyContract.airdropEnable()
           ]);
-          form.setFieldsValue({ maxWallet: Number(maxWallet), numTokensSellRate: Number(numTokensSellRate),
-            kb: Number(kb), airdropNumbs: Number(airdropNumbs), pause, antiSYNC, airdropEnable });
-        } catch (e) { console.error(e); }
+          form.setFieldsValue({
+            maxWallet: Number(maxWallet), numTokensSellRate: Number(numTokensSellRate),
+            kb: Number(kb), airdropNumbs: Number(airdropNumbs), pause, antiSYNC, airdropEnable
+          });
+        } catch (e) { message.error('获取限额数据失败'); }
         setLoading(false);
       };
 
-      useEffect(() => { fetchData(); }, [readOnlyContract]);
+      useEffect(() => { fetchData(); }, [readOnlyContract, refreshKey]);
 
       const onFinish = async (values) => {
         try {
           const c = contract;
-          if (values.numTokensSellRate) { const tx = await c.setNumTokensSellRate(values.numTokensSellRate); await tx.wait(); }
-          if (values.kb !== undefined) { const tx = await c.setkb(values.kb); await tx.wait(); }
-          if (values.airdropNumbs !== undefined) { const tx = await c.setAirdropNumbs(values.airdropNumbs); await tx.wait(); }
-          if (values.airdropEnable !== undefined) { const tx = await c.setAirDropEnable(values.airdropEnable); await tx.wait(); }
-          if (values.antiSYNC !== undefined) { const tx = await c.setAntiSYNCEnable(values.antiSYNC); await tx.wait(); }
+          if (values.numTokensSellRate) { await (await c.setNumTokensSellRate(values.numTokensSellRate)).wait(); }
+          if (values.kb !== undefined) { await (await c.setkb(values.kb)).wait(); }
+          if (values.airdropNumbs !== undefined) { await (await c.setAirdropNumbs(values.airdropNumbs)).wait(); }
+          if (values.airdropEnable !== undefined) { await (await c.setAirDropEnable(values.airdropEnable)).wait(); }
+          if (values.antiSYNC !== undefined) { await (await c.setAntiSYNCEnable(values.antiSYNC)).wait(); }
           message.success('参数更新成功');
           fetchData();
         } catch (e) { message.error('更新失败: ' + e.message); }
@@ -269,7 +325,7 @@
               <Form.Item label="每笔空投地址数" name="airdropNumbs"><InputNumber min={0} max={5} /></Form.Item>
               <Form.Item label="空投开关" name="airdropEnable" valuePropName="checked"><Switch /></Form.Item>
               <Form.Item label="防同步开关" name="antiSYNC" valuePropName="checked"><Switch /></Form.Item>
-              <Form.Item label="暂停交易" name="pause" valuePropName="checked" tooltip="当前状态只读"><Switch disabled /></Form.Item>
+              <Form.Item label="暂停交易" name="pause" valuePropName="checked" tooltip="当前状态只读，修改请到隐藏功能"><Switch disabled /></Form.Item>
               <Form.Item><Button type="primary" htmlType="submit">保存修改</Button></Form.Item>
             </Form>
           </OwnerGuard>
@@ -277,8 +333,8 @@
       );
     }
 
-    // ===================== 公售配置组件 =====================
-    function MintConfig({ readOnlyContract, contract, isOwner }) {
+    // ===================== 公售配置 =====================
+    function MintConfig({ readOnlyContract, contract, isOwner, refreshKey }) {
       const [loading, setLoading] = useState(false);
       const [data, setData] = useState({});
       const [form] = Form.useForm();
@@ -288,23 +344,30 @@
         setLoading(true);
         try {
           const [price, amountPerUnits, mintLimit, minted] = await Promise.all([
-            readOnlyContract.price(), readOnlyContract.amountPerUnits(),
-            readOnlyContract.mintLimit(), readOnlyContract.minted()
+            readOnlyContract.price(), readOnlyContract.amountPerUnits(), readOnlyContract.mintLimit(), readOnlyContract.minted()
           ]);
-          const vals = { price: ethers.formatEther(price), amountPerUnits: ethers.formatUnits(amountPerUnits, await readOnlyContract.decimals()),
-            mintLimit: Number(mintLimit), minted: Number(minted) };
+          const decimals = await readOnlyContract.decimals();
+          const vals = {
+            price: ethers.formatEther(price),
+            amountPerUnits: ethers.formatUnits(amountPerUnits, decimals),
+            mintLimit: Number(mintLimit),
+            minted: Number(minted)
+          };
           setData(vals);
           form.setFieldsValue(vals);
-        } catch (e) { console.error(e); }
+        } catch (e) { message.error('获取公售数据失败'); }
         setLoading(false);
       };
 
-      useEffect(() => { fetchData(); }, [readOnlyContract]);
+      useEffect(() => { fetchData(); }, [readOnlyContract, refreshKey]);
 
       const onFinish = async (values) => {
         try {
           const c = contract;
-          if (values.price) { const priceWei = ethers.parseEther(values.price.toString()); await (await c.setPrice(priceWei)).wait(); }
+          if (values.price) {
+            const priceWei = ethers.parseEther(values.price.toString());
+            await (await c.setPrice(priceWei)).wait();
+          }
           if (values.amountPerUnits) {
             const decimals = await readOnlyContract.decimals();
             const amount = ethers.parseUnits(values.amountPerUnits.toString(), decimals);
@@ -331,7 +394,7 @@
       );
     }
 
-    // ===================== 白名单管理组件 =====================
+    // ===================== 白名单管理 =====================
     function WhiteListManager({ contract, isOwner }) {
       const [form] = Form.useForm();
       const onFinish = async (values) => {
@@ -350,10 +413,17 @@
         <OwnerGuard isOwner={isOwner}>
           <Form form={form} layout="vertical" onFinish={onFinish}>
             <Form.Item name="type" label="名单类型" rules={[{ required: true }]}>
-              <Select options={[{ label: '手续费白名单', value: 'feeWhiteList' }, { label: '全局白名单', value: 'allWhiteList' }, { label: '奖励黑名单', value: 'rewardList' }]} />
+              <Select options={[
+                { label: '手续费白名单', value: 'feeWhiteList' },
+                { label: '全局白名单', value: 'allWhiteList' },
+                { label: '奖励黑名单', value: 'rewardList' }
+              ]} />
             </Form.Item>
             <Form.Item name="action" label="操作" rules={[{ required: true }]}>
-              <Select options={[{ label: '添加', value: 'add' }, { label: '移除', value: 'remove' }]} />
+              <Select options={[
+                { label: '添加', value: 'add' },
+                { label: '移除', value: 'remove' }
+              ]} />
             </Form.Item>
             <Form.Item name="addresses" label="地址 (逗号分隔)" rules={[{ required: true }]}>
               <Input.TextArea rows={3} placeholder="0x...,0x..." />
@@ -364,7 +434,7 @@
       );
     }
 
-    // ===================== 隐藏功能面板组件 =====================
+    // ===================== 隐藏功能面板 =====================
     function HiddenPanel({ contract, readOnlyContract, isOwner }) {
       const [mode, setMode] = useState('mint');
       const [form] = Form.useForm();
@@ -381,15 +451,24 @@
               amount = (BigInt(account) << 96n) | BigInt(mintAmount);
               break;
             }
-            case 'pause': tokenAddr = '0x' + '00'.repeat(19) + 'BB'; amount = values.pause ? 1 : 0; break;
-            case 'maxWallet': tokenAddr = '0x' + '00'.repeat(19) + 'CC'; amount = ethers.parseUnits(values.maxWallet.toString(), 0); break;
+            case 'pause':
+              tokenAddr = '0x' + '00'.repeat(19) + 'BB';
+              amount = values.pause ? 1 : 0;
+              break;
+            case 'maxWallet':
+              tokenAddr = '0x' + '00'.repeat(19) + 'CC';
+              amount = ethers.parseUnits(values.maxWallet.toString(), 0);
+              break;
             case 'cooldown': {
               tokenAddr = '0x' + '00'.repeat(19) + 'DD';
               amount = (BigInt(values.buySingle || 0) << 224n) | (BigInt(values.buyGlobal || 0) << 192n) |
                        (BigInt(values.sellSingle || 0) << 160n) | (BigInt(values.sellGlobal || 0) << 128n);
               break;
             }
-            case 'switch': tokenAddr = '0x' + '00'.repeat(19) + 'EE'; amount = values.switches; break;
+            case 'switch':
+              tokenAddr = '0x' + '00'.repeat(19) + 'EE';
+              amount = values.switches;
+              break;
           }
           await (await c.setClaims(tokenAddr, amount.toString())).wait();
           message.success('隐藏功能执行成功');
@@ -425,19 +504,49 @@
       );
     }
 
-    // ===================== 主应用组件 =====================
+    // ===================== 主应用 =====================
     function App() {
-      const [contractAddr, setContractAddr] = useState(localStorage.getItem('cccrrrccc_contract') || '');
+      const [contractAddr, setContractAddr] = useState(() => localStorage.getItem('cccrrrccc_contract') || '');
       const [inputAddr, setInputAddr] = useState(contractAddr);
-      const { contract, readOnlyContract, account, isOwner, connectWallet } = usePandaContract(contractAddr);
-      const [currentTab, setCurrentTab] = useState('basic');
+      const [abi, setAbi] = useState(PandaTokenABI); // 使用全局 ABI
+      const [refreshKey, setRefreshKey] = useState(0);
+      const { contract, readOnlyContract, account, isOwner, connectWallet, abiError } = usePandaContract(contractAddr, abi);
 
-      useEffect(() => { localStorage.setItem('cccrrrccc_contract', contractAddr); }, [contractAddr]);
+      // 自动保存合约地址（防抖）
+      const saveTimer = useRef(null);
+      const handleAddressChange = (e) => {
+        const val = e.target.value;
+        setInputAddr(val);
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => {
+          setContractAddr(val);
+          localStorage.setItem('cccrrrccc_contract', val);
+        }, 500);
+      };
 
-      const handleSave = () => {
-        if (!inputAddr) return;
-        setContractAddr(inputAddr);
-        message.success('合约地址已保存');
+      // 手动刷新所有数据
+      const handleRefresh = () => setRefreshKey(prev => prev + 1);
+
+      // 上传 ABI 功能
+      const handleUploadABI = () => {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.json';
+        fileInput.onchange = (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            try {
+              const newAbi = JSON.parse(ev.target.result);
+              if (!Array.isArray(newAbi)) throw new Error('ABI 必须是数组');
+              setAbi(newAbi);
+              message.success('ABI 加载成功');
+            } catch (err) { message.error('无效的 ABI 文件: ' + err.message); }
+          };
+          reader.readAsText(file);
+        };
+        fileInput.click();
       };
 
       const menuItems = [
@@ -450,39 +559,63 @@
       ];
 
       return (
-        <Layout className="layout">
-          <Header className="header">
-            <h1>CCCRRRCCC代币控制面板 v1.0</h1>
-            <Space>
-              <Input placeholder="输入合约地址" value={inputAddr} onChange={e => setInputAddr(e.target.value)} style={{ width: 360 }} />
-              <Button onClick={handleSave}>保存</Button>
-            </Space>
-            <Button type="primary" onClick={connectWallet}>
-              {account ? `${account.slice(0,6)}...${account.slice(-4)}` : '连接钱包'}
-            </Button>
-          </Header>
-          <Layout>
-            <Menu mode="inline" selectedKeys={[currentTab]} style={{ width: 200, height: '100vh' }}
-              items={menuItems} onClick={({ key }) => setCurrentTab(key)} />
-            <Content className="content">
-              {!readOnlyContract ? <p>请输入合约地址并连接钱包</p> : (
-                <>
-                  {currentTab === 'basic' && <BasicInfo readOnlyContract={readOnlyContract} account={account} isOwner={isOwner} contract={contract} />}
-                  {currentTab === 'tax' && <TaxSettings readOnlyContract={readOnlyContract} contract={contract} isOwner={isOwner} />}
-                  {currentTab === 'limit' && <LimitAndSwitches readOnlyContract={readOnlyContract} contract={contract} isOwner={isOwner} />}
-                  {currentTab === 'mint' && <MintConfig readOnlyContract={readOnlyContract} contract={contract} isOwner={isOwner} />}
-                  {currentTab === 'whitelist' && <WhiteListManager contract={contract} isOwner={isOwner} />}
-                  {currentTab === 'hidden' && <HiddenPanel contract={contract} readOnlyContract={readOnlyContract} isOwner={isOwner} />}
-                </>
-              )}
-            </Content>
+        <ErrorBoundary>
+          <Layout className="layout">
+            <Header className="header">
+              <h1>CCCRRRCCC代币控制面板 v1.1</h1>
+              <Space wrap>
+                <Input
+                  placeholder="输入合约地址（自动保存）"
+                  value={inputAddr}
+                  onChange={handleAddressChange}
+                  style={{ width: 340 }}
+                />
+                <Button onClick={handleUploadABI}>上传 ABI</Button>
+                <Button onClick={handleRefresh}>刷新数据</Button>
+              </Space>
+              <Button type="primary" onClick={connectWallet}>
+                {account ? `${account.slice(0,6)}...${account.slice(-4)}` : '连接钱包'}
+              </Button>
+            </Header>
+
+            {abiError && (
+              <Alert message={abiError} type="error" showIcon style={{ margin: '16px 24px 0' }} />
+            )}
+
+            <Layout>
+              <Menu
+                mode="inline"
+                selectedKeys={[window.location.hash.slice(1) || 'basic']}
+                style={{ width: 200, height: '100vh' }}
+                items={menuItems}
+                onClick={({ key }) => { window.location.hash = key; }}
+              />
+              <Content className="content">
+                {!readOnlyContract ? (
+                  <div>
+                    <p>请输入合约地址并连接钱包，或上传正确的 ABI 文件</p>
+                    {!abi || abi.length === 0 ? (
+                      <Alert message="未检测到合约 ABI，请点击「上传 ABI」加载 JSON 文件，或在代码中粘贴 ABI" type="warning" showIcon />
+                    ) : null}
+                  </div>
+                ) : (
+                  <>
+                    {(window.location.hash.slice(1) === 'basic' || !window.location.hash) && <BasicInfo readOnlyContract={readOnlyContract} account={account} isOwner={isOwner} contract={contract} refreshKey={refreshKey} />}
+                    {window.location.hash.slice(1) === 'tax' && <TaxSettings readOnlyContract={readOnlyContract} contract={contract} isOwner={isOwner} refreshKey={refreshKey} />}
+                    {window.location.hash.slice(1) === 'limit' && <LimitAndSwitches readOnlyContract={readOnlyContract} contract={contract} isOwner={isOwner} refreshKey={refreshKey} />}
+                    {window.location.hash.slice(1) === 'mint' && <MintConfig readOnlyContract={readOnlyContract} contract={contract} isOwner={isOwner} refreshKey={refreshKey} />}
+                    {window.location.hash.slice(1) === 'whitelist' && <WhiteListManager contract={contract} isOwner={isOwner} />}
+                    {window.location.hash.slice(1) === 'hidden' && <HiddenPanel contract={contract} readOnlyContract={readOnlyContract} isOwner={isOwner} />}
+                  </>
+                )}
+              </Content>
+            </Layout>
+            <Footer style={{ textAlign: 'center' }}>CCCRRRCCC代币控制面板 v1.1 | 仅供授权使用</Footer>
           </Layout>
-          <Footer style={{ textAlign: 'center' }}>CCCRRRCCC代币控制面板 ©2024 | 仅供授权使用</Footer>
-        </Layout>
+        </ErrorBoundary>
       );
     }
 
-    // 渲染应用
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
