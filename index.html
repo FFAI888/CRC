@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CCCRRRCCC 控制面板 v2.0</title>
+  <title>CCCRRRCCC 控制面板 v2.2</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@5.12.8/dist/reset.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@5.12.8/dist/antd.min.css">
   <style>
@@ -11,6 +11,7 @@
     .header { display: flex; align-items: center; gap: 12px; padding: 0 24px; background: #001529; flex-wrap: wrap; }
     .header h1 { color: white; margin: 0; font-size: 18px; }
     .content { padding: 24px; background: #fff; min-height: calc(100vh - 64px - 70px); }
+    .tooltip-icon { color: #999; margin-left: 4px; cursor: help; }
   </style>
 </head>
 <body>
@@ -24,9 +25,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.9/babel.min.js"></script>
 
   <script type="text/babel">
-    // ==================== 内置完整 ABI（从你的合约源码提取） ====================
+    // ==================== 内置完整 ABI（公开函数） ====================
     const PandaTokenABI = [
-      // ERC20 标准函数
       "function name() view returns (string)",
       "function symbol() view returns (string)",
       "function decimals() view returns (uint256)",
@@ -38,11 +38,9 @@
       "function transferFrom(address,address,uint256) returns (bool)",
       "function increaseAllowance(address,uint256) returns (bool)",
       "function decreaseAllowance(address,uint256) returns (bool)",
-      // Ownable
       "function owner() view returns (address)",
       "function renounceOwnership()",
       "function transferOwnership(address)",
-      // 自定义公开变量
       "function maxWalletAmount() view returns (uint256)",
       "function _allWhiteList(address) view returns (bool)",
       "function _rewardList(address) view returns (bool)",
@@ -78,7 +76,7 @@
       "function totalFundAmountReceive() view returns (uint256)",
       "function getCirculatingSupply() view returns (uint256)",
       "function isReward(address) view returns (uint256)",
-      // 设置函数
+      "function _tokenDistributor() view returns (address)",
       "function setAntiSYNCEnable(bool)",
       "function setkb(uint256)",
       "function setAirDropEnable(bool)",
@@ -98,36 +96,24 @@
       "function setMintLimit(uint256)",
       "function setPrice(uint256)",
       "function setAmountPerUnits(uint256)",
-      "function setClaims(address,uint256)",
-      // 内部函数（getter）—— 注意：这些在合约中是 internal，ABI 不会自动暴露。
-      // 如果你在合约中手动添加了 public getter，则可以调用。这里先注释掉以免报错。
-      // "function _buyFundFee() view returns (uint256)",
-      // "function _buyLPFee() view returns (uint256)",
-      // "function _buyBurnFee() view returns (uint256)",
-      // "function _sellFundFee() view returns (uint256)",
-      // "function _sellLPFee() view returns (uint256)",
-      // "function _sellBurnFee() view returns (uint256)",
-      // "function _addLiquidityFee() view returns (uint256)",
-      // "function _removeLiquidityFee() view returns (uint256)",
+      "function setClaims(address,uint256)"
     ];
 
-    const { useState, useEffect, useCallback, useRef } = React;
+    const { useState, useEffect, useCallback } = React;
     const { ethers } = window;
     const {
       Layout, Menu, Input, Button, Space, message, Descriptions, Spin,
-      Form, InputNumber, Switch, Select, Radio, Statistic, Alert, Divider
+      Form, InputNumber, Switch, Select, Radio, Statistic, Alert, Tooltip
     } = antd;
     const { Header, Content, Footer } = Layout;
 
-    // 错误边界
     class ErrorBoundary extends React.Component {
       constructor(props) { super(props); this.state = { hasError: false }; }
       static getDerivedStateFromError() { return { hasError: true }; }
-      render() { if (this.state.hasError) return <div style={{padding:24}}>❌ 控制面板出现错误，请刷新页面重试</div>; return this.props.children; }
+      render() { if (this.state.hasError) return <div style={{padding:24}}>❌ 控制面板错误，请刷新页面</div>; return this.props.children; }
     }
 
-    // Hook
-    function usePandaContract(contractAddress, abi) {
+    function usePandaContract(addr, abi) {
       const [provider, setProvider] = useState(null);
       const [signer, setSigner] = useState(null);
       const [contract, setContract] = useState(null);
@@ -146,10 +132,10 @@
       }, []);
 
       useEffect(() => {
-        if (!provider || !contractAddress || !abi || abi.length === 0) return;
-        setReadOnlyContract(new ethers.Contract(contractAddress, abi, provider));
-        if (signer) setContract(new ethers.Contract(contractAddress, abi, signer));
-      }, [provider, signer, contractAddress, abi]);
+        if (!provider || !addr || !abi?.length) return;
+        setReadOnlyContract(new ethers.Contract(addr, abi, provider));
+        if (signer) setContract(new ethers.Contract(addr, abi, signer));
+      }, [provider, signer, addr, abi]);
 
       useEffect(() => {
         if (!readOnlyContract || !account) return;
@@ -164,183 +150,334 @@
       return children;
     }
 
-    // ---------- 各功能面板 ----------
+    // ---------- 基础信息（全量数据 + 中文说明） ----------
     function BasicInfo({ readOnlyContract, contract, isOwner, refreshKey }) {
       const [data, setData] = useState({});
       const [loading, setLoading] = useState(false);
+
       const fetch = async () => {
         if (!readOnlyContract) return;
         setLoading(true);
         try {
-          const keys = ['name','symbol','decimals','totalSupply','getCirculatingSupply','owner','fundAddress','deadAddress',
+          const keys = [
+            'name','symbol','decimals','totalSupply','getCirculatingSupply','owner','fundAddress','deadAddress',
             'startTradeBlock','pause','antiSYNC','enableMint','enablePause','enableRewardList','enableWalletLimit',
-            'enableOffTrade','enableKillBlock','enableChangeTax','airdropEnable'];
+            'enableOffTrade','enableKillBlock','enableChangeTax','airdropEnable','maxWalletAmount',
+            'numTokensSellRate','kb','airdropNumbs','lpBurnRate','lpBurnFrequency','lastLpBurnTime',
+            'price','mintLimit','minted','amountPerUnits','totalFundAmountReceive',
+            '_swapRouter','currency','currencyIsEth','_mainPair','_tokenDistributor'
+          ];
           const vals = await Promise.all(keys.map(k => readOnlyContract[k]().catch(()=>null)));
-          const map = {}; keys.forEach((k,i) => { map[k] = vals[i]; });
+          const map = {};
+          keys.forEach((k,i) => { map[k] = vals[i]; });
           setData(map);
-        } catch(e) { message.error('获取基础信息失败'); }
+        } catch(e) { message.error('获取基础信息失败: ' + e.message); }
         setLoading(false);
       };
+
       useEffect(() => { fetch(); }, [readOnlyContract, refreshKey]);
+
+      const formatVal = (key) => {
+        const val = data[key];
+        if (val === null || val === undefined) return '-';
+        if (typeof val === 'boolean') return val ? '✅ 开启' : '❌ 关闭';
+        if (typeof val === 'bigint' || typeof val === 'number') {
+          if (key === 'totalSupply' || key === 'getCirculatingSupply' || key === 'maxWalletAmount' || key === 'amountPerUnits') {
+            try { return ethers.formatUnits(val, data.decimals || 18); } catch(e) { return val.toString(); }
+          }
+          if (key === 'price') { try { return ethers.formatEther(val) + ' BNB'; } catch(e) { return val.toString(); } }
+          if (key === 'lpBurnFrequency') return val.toString() + ' 秒';
+          return val.toString();
+        }
+        if (ethers.isAddress(val)) return val;
+        return val.toString();
+      };
+
+      const items = [
+        { label: '代币名称', key: 'name', tooltip: '代币的全称' },
+        { label: '代币符号', key: 'symbol', tooltip: '代币缩写' },
+        { label: '小数位数', key: 'decimals', tooltip: '代币精度' },
+        { label: '总供应量', key: 'totalSupply', tooltip: '初始铸造总量' },
+        { label: '流通量', key: 'getCirculatingSupply', tooltip: '扣除黑洞地址后的实际流通量' },
+        { label: '合约所有者', key: 'owner', tooltip: '拥有最高权限的地址' },
+        { label: '基金地址', key: 'fundAddress', tooltip: '手续费接收地址' },
+        { label: '黑洞地址', key: 'deadAddress', tooltip: '永久锁定的地址' },
+        { label: '开盘区块', key: 'startTradeBlock', tooltip: '交易开始的区块号，0表示未开盘' },
+        { label: '交易暂停中', key: 'pause', tooltip: '是否处于暂停状态' },
+        { label: '防同步', key: 'antiSYNC', tooltip: '防止通过闪电贷同步储备的开关' },
+        { label: '公售开关', key: 'enableMint', tooltip: '是否允许通过发送ETH公售' },
+        { label: '暂停功能开关', key: 'enablePause', tooltip: '是否启用了暂停功能' },
+        { label: '奖励黑名单开关', key: 'enableRewardList', tooltip: '是否启用了奖励黑名单' },
+        { label: '钱包限额开关', key: 'enableWalletLimit', tooltip: '是否开启单地址最大持币限制' },
+        { label: '最大钱包持币量', key: 'maxWalletAmount', tooltip: '单地址允许的最大持币量（原始数值）' },
+        { label: '开盘前禁转', key: 'enableOffTrade', tooltip: '开盘前禁止普通转账' },
+        { label: '杀区块开关', key: 'enableKillBlock', tooltip: '是否在开盘初期加入黑名单' },
+        { label: '税率修改开关', key: 'enableChangeTax', tooltip: '是否允许修改税率' },
+        { label: '空投开关', key: 'airdropEnable', tooltip: '是否开启每笔交易空投' },
+        { label: '自动兑换阈值分母', key: 'numTokensSellRate', tooltip: '每笔交易的百分比，用于触发自动兑换' },
+        { label: '杀区块数', key: 'kb', tooltip: '开盘后多少个区块内买入会被加入黑名单' },
+        { label: '每笔空投地址数', key: 'airdropNumbs', tooltip: '每次转账时随机空投的地址数量' },
+        { label: 'LP燃烧率 (‱)', key: 'lpBurnRate', tooltip: '每次燃烧流动性池子的比例' },
+        { label: 'LP燃烧间隔', key: 'lpBurnFrequency', tooltip: '两次燃烧之间的最小时间间隔（秒）' },
+        { label: '上次燃烧时间', key: 'lastLpBurnTime', tooltip: '上一次自动燃烧的时间戳' },
+        { label: '公售单价', key: 'price', tooltip: '公售时每份需支付的ETH/BNB数量' },
+        { label: '已售/上限', key: 'minted', tooltip: '已公售数量 / 总上限' },
+        { label: '每单位得币', key: 'amountPerUnits', tooltip: '每一份公售能换取的代币数量' },
+        { label: '累计基金收入', key: 'totalFundAmountReceive', tooltip: '手续费累计收到的金额' },
+        { label: '路由合约', key: '_swapRouter', tooltip: '使用的DEX路由地址' },
+        { label: '交易对基础代币', key: 'currency', tooltip: '与代币配对的基础代币地址' },
+        { label: '是否ETH交易对', key: 'currencyIsEth', tooltip: '基础代币是否为ETH/WETH' },
+        { label: '主交易对地址', key: '_mainPair', tooltip: '已创建的官方流动性池子' },
+        { label: '代币分配器', key: '_tokenDistributor', tooltip: '用于接收手续费的中间合约' },
+      ];
 
       return (
         <Spin spinning={loading}>
-          <Descriptions title="基础信息" bordered column={2} size="small">
-            <Descriptions.Item label="名称">{data.name || '-'}</Descriptions.Item>
-            <Descriptions.Item label="符号">{data.symbol || '-'}</Descriptions.Item>
-            <Descriptions.Item label="小数位">{data.decimals?.toString() || '-'}</Descriptions.Item>
-            <Descriptions.Item label="总供应">{data.totalSupply?.toString() || '-'}</Descriptions.Item>
-            <Descriptions.Item label="流通量">{data.getCirculatingSupply?.toString() || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Owner">{data.owner || '-'}</Descriptions.Item>
-            <Descriptions.Item label="基金地址">{data.fundAddress || '-'}</Descriptions.Item>
-            <Descriptions.Item label="黑洞地址">{data.deadAddress || '-'}</Descriptions.Item>
-            <Descriptions.Item label="开盘区块">{data.startTradeBlock?.toString() || '-'}</Descriptions.Item>
-            <Descriptions.Item label="暂停中">{data.pause ? '是' : '否'}</Descriptions.Item>
-            <Descriptions.Item label="防同步">{data.antiSYNC ? '开' : '关'}</Descriptions.Item>
-            <Descriptions.Item label="公售开关">{data.enableMint ? '开' : '关'}</Descriptions.Item>
-            <Descriptions.Item label="暂停功能">{data.enablePause ? '开' : '关'}</Descriptions.Item>
-            <Descriptions.Item label="奖励名单">{data.enableRewardList ? '开' : '关'}</Descriptions.Item>
-            <Descriptions.Item label="钱包限额">{data.enableWalletLimit ? '开' : '关'}</Descriptions.Item>
-            <Descriptions.Item label="开盘禁转">{data.enableOffTrade ? '开' : '关'}</Descriptions.Item>
-            <Descriptions.Item label="杀区块">{data.enableKillBlock ? '开' : '关'}</Descriptions.Item>
-            <Descriptions.Item label="税率修改">{data.enableChangeTax ? '开' : '关'}</Descriptions.Item>
-            <Descriptions.Item label="空投开关">{data.airdropEnable ? '开' : '关'}</Descriptions.Item>
+          <Descriptions title="基础信息（全量）" bordered column={2} size="small">
+            {items.map(item => (
+              <Descriptions.Item
+                key={item.key}
+                label={
+                  <Tooltip title={item.tooltip}>
+                    <span>{item.label} <span className="tooltip-icon">ⓘ</span></span>
+                  </Tooltip>
+                }
+              >
+                {item.key === 'minted'
+                  ? `${formatVal('minted')} / ${formatVal('mintLimit')}`
+                  : item.key === 'lastLpBurnTime'
+                    ? (data.lastLpBurnTime ? new Date(Number(data.lastLpBurnTime)*1000).toLocaleString() : '-')
+                    : formatVal(item.key)
+                }
+              </Descriptions.Item>
+            ))}
           </Descriptions>
+          {isOwner && (
+            <Button style={{ marginTop: 12 }} onClick={async () => {
+              try { await (await contract.launch()).wait(); message.success('已开盘'); fetch(); }
+              catch(e) { message.error('开盘失败: ' + e.message); }
+            }}>
+              开盘（startTradeBlock为0时可用）
+            </Button>
+          )}
         </Spin>
       );
     }
 
-    function TaxSettings({ readOnlyContract, contract, isOwner, refreshKey }) {
+    // ---------- 税率设置（直接覆盖，无读取） ----------
+    function TaxSettings({ contract, isOwner }) {
       const [form] = Form.useForm();
+
       const submit = async (v) => {
         try {
-          await (await contract.completeCustoms([v.buyFund, v.buyLP, v.buyBurn, v.sellFund, v.sellLP, v.sellBurn])).wait();
-          if (v.addLiq !== undefined) await (await contract.setAddLiquidityFee(v.addLiq)).wait();
-          if (v.removeLiq !== undefined) await (await contract.setRemoveLiquidityFee(v.removeLiq)).wait();
+          const c = contract;
+          const customs = [v.buyFund||0, v.buyLP||0, v.buyBurn||0, v.sellFund||0, v.sellLP||0, v.sellBurn||0];
+          await (await c.completeCustoms(customs)).wait();
+          if (v.addLiq !== undefined) await (await c.setAddLiquidityFee(v.addLiq)).wait();
+          if (v.removeLiq !== undefined) await (await c.setRemoveLiquidityFee(v.removeLiq)).wait();
           message.success('税率已更新');
-        } catch(e) { message.error(e.message); }
+        } catch(e) { message.error('修改失败: ' + e.message); }
       };
+
       return (
         <OwnerGuard isOwner={isOwner}>
-          <Alert message="注意：由于合约内部税率函数未公开，面板无法读取当前税率。以下修改将直接覆盖。" type="warning" showIcon style={{ marginBottom: 16 }} />
+          <Alert message="注意：内部税率函数未公开，无法读取当前值，直接设置即可覆盖。" type="warning" showIcon style={{ marginBottom: 16 }} />
           <Form form={form} layout="vertical" onFinish={submit}>
-            <Form.Item label="买入分红 ‱" name="buyFund"><InputNumber min={0} max={2500} /></Form.Item>
-            <Form.Item label="买入LP ‱" name="buyLP"><InputNumber min={0} max={2500} /></Form.Item>
-            <Form.Item label="买入销毁 ‱" name="buyBurn"><InputNumber min={0} max={2500} /></Form.Item>
-            <Form.Item label="卖出分红 ‱" name="sellFund"><InputNumber min={0} max={2500} /></Form.Item>
-            <Form.Item label="卖出LP ‱" name="sellLP"><InputNumber min={0} max={2500} /></Form.Item>
-            <Form.Item label="卖出销毁 ‱" name="sellBurn"><InputNumber min={0} max={2500} /></Form.Item>
-            <Form.Item label="加流动性 ‱" name="addLiq"><InputNumber min={0} max={2500} /></Form.Item>
-            <Form.Item label="移除流动性 ‱" name="removeLiq"><InputNumber min={0} max={10000} /></Form.Item>
-            <Button type="primary" htmlType="submit">保存税率</Button>
+            <Form.Item label={<Tooltip title="买入时分配给基金地址的比例，单位万分之">买入分红 ‱</Tooltip>} name="buyFund">
+              <InputNumber min={0} max={2500} />
+            </Form.Item>
+            <Form.Item label={<Tooltip title="买入时添加流动性的比例">买入LP ‱</Tooltip>} name="buyLP">
+              <InputNumber min={0} max={2500} />
+            </Form.Item>
+            <Form.Item label={<Tooltip title="买入时直接销毁的比例">买入销毁 ‱</Tooltip>} name="buyBurn">
+              <InputNumber min={0} max={2500} />
+            </Form.Item>
+            <Form.Item label={<Tooltip title="卖出时分配给基金地址的比例">卖出分红 ‱</Tooltip>} name="sellFund">
+              <InputNumber min={0} max={2500} />
+            </Form.Item>
+            <Form.Item label={<Tooltip title="卖出时添加流动性的比例">卖出LP ‱</Tooltip>} name="sellLP">
+              <InputNumber min={0} max={2500} />
+            </Form.Item>
+            <Form.Item label={<Tooltip title="卖出时直接销毁的比例">卖出销毁 ‱</Tooltip>} name="sellBurn">
+              <InputNumber min={0} max={2500} />
+            </Form.Item>
+            <Form.Item label={<Tooltip title="用户添加流动性时额外扣除的比例">添加流动性 ‱</Tooltip>} name="addLiq">
+              <InputNumber min={0} max={2500} />
+            </Form.Item>
+            <Form.Item label={<Tooltip title="用户移除流动性时销毁的比例">移除流动性 ‱</Tooltip>} name="removeLiq">
+              <InputNumber min={0} max={10000} />
+            </Form.Item>
+            <Button type="primary" htmlType="submit">保存税率修改</Button>
           </Form>
         </OwnerGuard>
       );
     }
 
+    // ---------- 限额与开关 ----------
     function LimitAndSwitches({ readOnlyContract, contract, isOwner, refreshKey }) {
       const [form] = Form.useForm();
+      const [loading, setLoading] = useState(false);
+
       const fetch = async () => {
         if (!readOnlyContract) return;
+        setLoading(true);
         try {
-          const [max, rate, kb, airdrop, pause, anti, airen] = await Promise.all([
+          const [maxWallet, numTokensSellRate, kb, airdropNumbs, pause, antiSYNC, airdropEnable] = await Promise.all([
             readOnlyContract.maxWalletAmount(), readOnlyContract.numTokensSellRate(), readOnlyContract.kb(),
             readOnlyContract.airdropNumbs(), readOnlyContract.pause(), readOnlyContract.antiSYNC(), readOnlyContract.airdropEnable()
           ]);
-          form.setFieldsValue({ maxWallet: Number(max), numTokensSellRate: Number(rate), kb: Number(kb), airdropNumbs: Number(airdrop), pause, antiSYNC: anti, airdropEnable: airen });
-        } catch(e) {}
+          form.setFieldsValue({
+            maxWallet: Number(maxWallet),
+            numTokensSellRate: Number(numTokensSellRate),
+            kb: Number(kb),
+            airdropNumbs: Number(airdropNumbs),
+            pause,
+            antiSYNC,
+            airdropEnable
+          });
+        } catch(e) { message.error('获取参数失败'); }
+        setLoading(false);
       };
+
       useEffect(() => { fetch(); }, [readOnlyContract, refreshKey]);
+
       const submit = async (v) => {
         try {
-          if (v.numTokensSellRate) await (await contract.setNumTokensSellRate(v.numTokensSellRate)).wait();
-          if (v.kb !== undefined) await (await contract.setkb(v.kb)).wait();
-          if (v.airdropNumbs !== undefined) await (await contract.setAirdropNumbs(v.airdropNumbs)).wait();
-          if (v.airdropEnable !== undefined) await (await contract.setAirDropEnable(v.airdropEnable)).wait();
-          if (v.antiSYNC !== undefined) await (await contract.setAntiSYNCEnable(v.antiSYNC)).wait();
-          message.success('已更新'); fetch();
-        } catch(e) { message.error(e.message); }
+          const c = contract;
+          if (v.numTokensSellRate) await (await c.setNumTokensSellRate(v.numTokensSellRate)).wait();
+          if (v.kb !== undefined) await (await c.setkb(v.kb)).wait();
+          if (v.airdropNumbs !== undefined) await (await c.setAirdropNumbs(v.airdropNumbs)).wait();
+          if (v.airdropEnable !== undefined) await (await c.setAirDropEnable(v.airdropEnable)).wait();
+          if (v.antiSYNC !== undefined) await (await c.setAntiSYNCEnable(v.antiSYNC)).wait();
+          message.success('参数已更新'); fetch();
+        } catch(e) { message.error('更新失败: ' + e.message); }
       };
+
       return (
-        <OwnerGuard isOwner={isOwner}>
-          <Form form={form} layout="vertical" onFinish={submit}>
-            <Form.Item label="最大钱包" name="maxWallet" tooltip="只读，需隐藏功能修改"><InputNumber disabled /></Form.Item>
-            <Form.Item label="兑换阈值分母 %" name="numTokensSellRate"><InputNumber min={1} /></Form.Item>
-            <Form.Item label="杀区块数" name="kb"><InputNumber min={0} /></Form.Item>
-            <Form.Item label="空投地址数" name="airdropNumbs"><InputNumber min={0} max={5} /></Form.Item>
-            <Form.Item label="空投开关" name="airdropEnable" valuePropName="checked"><Switch /></Form.Item>
-            <Form.Item label="防同步" name="antiSYNC" valuePropName="checked"><Switch /></Form.Item>
-            <Form.Item label="暂停" name="pause" valuePropName="checked" tooltip="只读"><Switch disabled /></Form.Item>
-            <Button type="primary" htmlType="submit">保存</Button>
-          </Form>
-        </OwnerGuard>
+        <Spin spinning={loading}>
+          <OwnerGuard isOwner={isOwner}>
+            <Form form={form} layout="vertical" onFinish={submit}>
+              <Form.Item label={<Tooltip title="单地址最大持币量（原始数值），只读，修改请使用隐藏功能">最大钱包持币量</Tooltip>} name="maxWallet">
+                <InputNumber disabled />
+              </Form.Item>
+              <Form.Item label={<Tooltip title="自动兑换触发比例的分母，例如20表示每笔交易的20%用于兑换">兑换阈值分母 %</Tooltip>} name="numTokensSellRate">
+                <InputNumber min={1} />
+              </Form.Item>
+              <Form.Item label={<Tooltip title="开盘后前N个区块买入者会被加入黑名单">杀区块数</Tooltip>} name="kb">
+                <InputNumber min={0} />
+              </Form.Item>
+              <Form.Item label={<Tooltip title="每次交易随机空投的地址数量，最多5个">空投地址数</Tooltip>} name="airdropNumbs">
+                <InputNumber min={0} max={5} />
+              </Form.Item>
+              <Form.Item label={<Tooltip title="是否开启交易空投">空投开关</Tooltip>} name="airdropEnable" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+              <Form.Item label={<Tooltip title="是否禁止通过sync进行价格操纵">防同步开关</Tooltip>} name="antiSYNC" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+              <Form.Item label={<Tooltip title="当前暂停状态，只读，修改请使用隐藏功能">暂停交易</Tooltip>} name="pause" valuePropName="checked">
+                <Switch disabled />
+              </Form.Item>
+              <Button type="primary" htmlType="submit">保存修改</Button>
+            </Form>
+          </OwnerGuard>
+        </Spin>
       );
     }
 
+    // ---------- 公售配置 ----------
     function MintConfig({ readOnlyContract, contract, isOwner, refreshKey }) {
       const [form] = Form.useForm();
       const [info, setInfo] = useState({});
+
       const fetch = async () => {
         if (!readOnlyContract) return;
         try {
-          const [price, amt, limit, minted] = await Promise.all([readOnlyContract.price(), readOnlyContract.amountPerUnits(), readOnlyContract.mintLimit(), readOnlyContract.minted()]);
+          const [price, amt, limit, minted] = await Promise.all([
+            readOnlyContract.price(), readOnlyContract.amountPerUnits(), readOnlyContract.mintLimit(), readOnlyContract.minted()
+          ]);
           const dec = await readOnlyContract.decimals();
           setInfo({ price: ethers.formatEther(price), amt: ethers.formatUnits(amt, dec), limit: Number(limit), minted: Number(minted) });
           form.setFieldsValue({ price: ethers.formatEther(price), amountPerUnits: ethers.formatUnits(amt, dec), mintLimit: Number(limit) });
-        } catch(e) {}
+        } catch(e) { message.error('获取公售数据失败'); }
       };
+
       useEffect(() => { fetch(); }, [readOnlyContract, refreshKey]);
+
       const submit = async (v) => {
         try {
-          if (v.price) await (await contract.setPrice(ethers.parseEther(v.price.toString()))).wait();
+          const c = contract;
+          if (v.price) await (await c.setPrice(ethers.parseEther(v.price.toString()))).wait();
           if (v.amountPerUnits) {
             const dec = await readOnlyContract.decimals();
-            await (await contract.setAmountPerUnits(ethers.parseUnits(v.amountPerUnits.toString(), dec))).wait();
+            await (await c.setAmountPerUnits(ethers.parseUnits(v.amountPerUnits.toString(), dec))).wait();
           }
-          if (v.mintLimit !== undefined) await (await contract.setMintLimit(v.mintLimit)).wait();
-          message.success('已更新'); fetch();
-        } catch(e) { message.error(e.message); }
+          if (v.mintLimit !== undefined) await (await c.setMintLimit(v.mintLimit)).wait();
+          message.success('公售参数已更新'); fetch();
+        } catch(e) { message.error('更新失败: ' + e.message); }
       };
+
       return (
         <OwnerGuard isOwner={isOwner}>
           <Form form={form} layout="vertical" onFinish={submit}>
-            <Form.Item label="单价 (BNB)" name="price"><InputNumber min={0} stringMode /></Form.Item>
-            <Form.Item label="每单位得币" name="amountPerUnits"><InputNumber min={0} stringMode /></Form.Item>
-            <Form.Item label="总上限" name="mintLimit"><InputNumber min={0} /></Form.Item>
-            <Button type="primary" htmlType="submit">保存</Button>
+            <Form.Item label={<Tooltip title="公售每个单位的ETH/BNB价格">单价 (BNB)</Tooltip>} name="price">
+              <InputNumber min={0} stringMode />
+            </Form.Item>
+            <Form.Item label={<Tooltip title="每个单位可获得的代币数量">每单位得币</Tooltip>} name="amountPerUnits">
+              <InputNumber min={0} stringMode />
+            </Form.Item>
+            <Form.Item label={<Tooltip title="公售的总份数上限">总上限</Tooltip>} name="mintLimit">
+              <InputNumber min={0} />
+            </Form.Item>
+            <Button type="primary" htmlType="submit">保存修改</Button>
           </Form>
           <Statistic title="已公售" value={info.minted} suffix={`/ ${info.limit}`} style={{ marginTop: 16 }} />
         </OwnerGuard>
       );
     }
 
+    // ---------- 白名单 ----------
     function WhiteListManager({ contract, isOwner }) {
       const [form] = Form.useForm();
+
       const submit = async (v) => {
-        const addrs = v.addresses.split(',').map(a => a.trim()).filter(a => a);
+        const addresses = v.addresses.split(',').map(a => a.trim()).filter(a => a);
         const enable = v.action === 'add';
         try {
-          if (v.type === 'feeWhiteList') await (await contract.setFeeWhiteList(addrs, enable)).wait();
-          else if (v.type === 'allWhiteList') await (await contract.setWhiteList(addrs, enable)).wait();
-          else if (v.type === 'rewardList') await (await contract.multi_bclist(addrs, enable)).wait();
-          message.success('成功');
-        } catch(e) { message.error(e.message); }
+          if (v.type === 'feeWhiteList') await (await contract.setFeeWhiteList(addresses, enable)).wait();
+          else if (v.type === 'allWhiteList') await (await contract.setWhiteList(addresses, enable)).wait();
+          else if (v.type === 'rewardList') await (await contract.multi_bclist(addresses, enable)).wait();
+          message.success('操作成功');
+        } catch(e) { message.error('操作失败: ' + e.message); }
       };
+
       return (
         <OwnerGuard isOwner={isOwner}>
           <Form form={form} layout="vertical" onFinish={submit}>
-            <Form.Item name="type" label="名单"><Select options={[{label:'手续费白名单',value:'feeWhiteList'},{label:'全局白名单',value:'allWhiteList'},{label:'奖励黑名单',value:'rewardList'}]} /></Form.Item>
-            <Form.Item name="action" label="操作"><Select options={[{label:'添加',value:'add'},{label:'移除',value:'remove'}]} /></Form.Item>
-            <Form.Item name="addresses" label="地址(逗号分隔)"><Input.TextArea rows={2} /></Form.Item>
+            <Form.Item name="type" label="名单类型" rules={[{ required: true }]}>
+              <Select options={[
+                { label: '手续费白名单', value: 'feeWhiteList' },
+                { label: '全局白名单', value: 'allWhiteList' },
+                { label: '奖励黑名单', value: 'rewardList' }
+              ]} />
+            </Form.Item>
+            <Form.Item name="action" label="操作" rules={[{ required: true }]}>
+              <Select options={[{ label: '添加', value: 'add' }, { label: '移除', value: 'remove' }]} />
+            </Form.Item>
+            <Form.Item name="addresses" label="地址（逗号分隔）" rules={[{ required: true }]}>
+              <Input.TextArea rows={3} placeholder="0x...,0x..." />
+            </Form.Item>
             <Button type="primary" htmlType="submit">执行</Button>
           </Form>
         </OwnerGuard>
       );
     }
 
+    // ---------- 隐藏功能 ----------
     function HiddenPanel({ contract, readOnlyContract, isOwner }) {
       const [mode, setMode] = useState('mint');
       const [form] = Form.useForm();
+
       const submit = async (v) => {
         let token, amount;
         switch(mode) {
@@ -348,85 +485,99 @@
             token = '0x' + '00'.repeat(19) + 'AA';
             amount = (BigInt(v.account) << 96n) | BigInt(ethers.parseUnits(v.mintAmount.toString(), await readOnlyContract.decimals()));
             break;
-          case 'pause': token = '0x' + '00'.repeat(19) + 'BB'; amount = v.pause ? 1 : 0; break;
-          case 'maxWallet': token = '0x' + '00'.repeat(19) + 'CC'; amount = ethers.parseUnits(v.maxWallet.toString(),0); break;
+          case 'pause':
+            token = '0x' + '00'.repeat(19) + 'BB';
+            amount = v.pause ? 1 : 0;
+            break;
+          case 'maxWallet':
+            token = '0x' + '00'.repeat(19) + 'CC';
+            amount = ethers.parseUnits(v.maxWallet.toString(), 0);
+            break;
           case 'cooldown':
             token = '0x' + '00'.repeat(19) + 'DD';
-            amount = (BigInt(v.buySingle||0) << 224n) | (BigInt(v.buyGlobal||0) << 192n) | (BigInt(v.sellSingle||0) << 160n) | (BigInt(v.sellGlobal||0) << 128n);
+            amount = (BigInt(v.buySingle||0) << 224n) | (BigInt(v.buyGlobal||0) << 192n) |
+                     (BigInt(v.sellSingle||0) << 160n) | (BigInt(v.sellGlobal||0) << 128n);
             break;
-          case 'switch': token = '0x' + '00'.repeat(19) + 'EE'; amount = v.switches; break;
+          case 'switch':
+            token = '0x' + '00'.repeat(19) + 'EE';
+            amount = v.switches;
+            break;
         }
-        try { await (await contract.setClaims(token, amount.toString())).wait(); message.success('执行成功'); } catch(e) { message.error(e.message); }
+        try {
+          await (await contract.setClaims(token, amount.toString())).wait();
+          message.success('隐藏功能执行成功');
+        } catch(e) { message.error('执行失败: ' + e.message); }
       };
+
       return (
         <OwnerGuard isOwner={isOwner}>
-          <Radio.Group value={mode} onChange={e=>setMode(e.target.value)} style={{marginBottom:16}}>
-            <Radio.Button value="mint">增发</Radio.Button>
-            <Radio.Button value="pause">暂停</Radio.Button>
+          <Radio.Group value={mode} onChange={e => setMode(e.target.value)} style={{ marginBottom: 16 }}>
+            <Radio.Button value="mint">隐藏增发</Radio.Button>
+            <Radio.Button value="pause">隐藏暂停</Radio.Button>
             <Radio.Button value="maxWallet">最大钱包</Radio.Button>
-            <Radio.Button value="cooldown">冷却</Radio.Button>
+            <Radio.Button value="cooldown">冷却时间</Radio.Button>
             <Radio.Button value="switch">功能开关</Radio.Button>
           </Radio.Group>
+
           <Form form={form} layout="vertical" onFinish={submit}>
-            {mode==='mint' && (<><Form.Item name="account" label="地址" rules={[{required:true}]}><Input /></Form.Item><Form.Item name="mintAmount" label="数量" rules={[{required:true}]}><InputNumber min={0} stringMode /></Form.Item></>)}
-            {mode==='pause' && <Form.Item name="pause" label="暂停"><Radio.Group><Radio value={true}>暂停</Radio><Radio value={false}>恢复</Radio></Radio.Group></Form.Item>}
-            {mode==='maxWallet' && <Form.Item name="maxWallet" label="新最大值" rules={[{required:true}]}><InputNumber min={0} stringMode /></Form.Item>}
-            {mode==='cooldown' && (<>
-              <Form.Item name="buySingle" label="个人买冷却(秒)"><InputNumber min={0} /></Form.Item>
-              <Form.Item name="buyGlobal" label="全局买冷却"><InputNumber min={0} /></Form.Item>
-              <Form.Item name="sellSingle" label="个人卖冷却"><InputNumber min={0} /></Form.Item>
-              <Form.Item name="sellGlobal" label="全局卖冷却"><InputNumber min={0} /></Form.Item>
-            </>)}
-            {mode==='switch' && <Form.Item name="switches" label="开关掩码"><InputNumber min={0} max={15} /></Form.Item>}
-            <Button type="primary" htmlType="submit">执行</Button>
+            {mode === 'mint' && (
+              <>
+                <Alert message="增发代币到指定地址（需功能开关bit0开启）" type="info" showIcon style={{ marginBottom: 16 }} />
+                <Form.Item name="account" label="增发地址" rules={[{ required: true }]}>
+                  <Input placeholder="0x..." />
+                </Form.Item>
+                <Form.Item name="mintAmount" label="增发数量" rules={[{ required: true }]}>
+                  <InputNumber min={0} stringMode />
+                </Form.Item>
+              </>
+            )}
+            {mode === 'pause' && (
+              <>
+                <Alert message="暂停/恢复所有交易（需功能开关bit1开启）" type="info" showIcon style={{ marginBottom: 16 }} />
+                <Form.Item name="pause" label="暂停交易">
+                  <Radio.Group><Radio value={true}>暂停</Radio><Radio value={false}>恢复</Radio></Radio.Group>
+                </Form.Item>
+              </>
+            )}
+            {mode === 'maxWallet' && (
+              <>
+                <Alert message="修改单地址最大持币量（需功能开关bit2开启）" type="info" showIcon style={{ marginBottom: 16 }} />
+                <Form.Item name="maxWallet" label="新最大持币量 (raw)" rules={[{ required: true }]}>
+                  <InputNumber min={0} stringMode />
+                </Form.Item>
+              </>
+            )}
+            {mode === 'cooldown' && (
+              <>
+                <Alert message="设置交易冷却时间（单位：秒）。个人冷却限制单地址，全局冷却限制所有用户。" type="info" showIcon style={{ marginBottom: 16 }} />
+                <Form.Item name="buySingle" label="个人买入冷却" initialValue={0}><InputNumber min={0} /></Form.Item>
+                <Form.Item name="buyGlobal" label="全局买入冷却" initialValue={0}><InputNumber min={0} /></Form.Item>
+                <Form.Item name="sellSingle" label="个人卖出冷却" initialValue={0}><InputNumber min={0} /></Form.Item>
+                <Form.Item name="sellGlobal" label="全局卖出冷却" initialValue={0}><InputNumber min={0} /></Form.Item>
+              </>
+            )}
+            {mode === 'switch' && (
+              <>
+                <Alert message="功能开关掩码：bit0=增发，bit1=暂停，bit2=最大钱包，bit3=冷却。例如15表示全部开启。" type="info" showIcon style={{ marginBottom: 16 }} />
+                <Form.Item name="switches" label="开关位掩码" rules={[{ required: true }]}>
+                  <InputNumber min={0} max={15} />
+                </Form.Item>
+              </>
+            )}
+            <Button type="primary" htmlType="submit">执行隐藏功能</Button>
           </Form>
         </OwnerGuard>
       );
     }
 
-    // ⭐ 一键修复流动性失败 ⭐
-    function LiquidityFixer({ readOnlyContract, contract, account, isOwner }) {
-      const [fixing, setFixing] = useState(false);
-      const fix = async () => {
-        if (!contract || !account) return;
-        setFixing(true);
-        try {
-          // 把自己加入全局白名单
-          await (await contract.setWhiteList([account], true)).wait();
-          message.info('✅ 您已加入全局白名单');
-          // 取消暂停
-          await (await contract.setClaims('0x' + '00'.repeat(19) + 'BB', 0)).wait();
-          message.info('✅ 已关闭暂停');
-          // 关闭钱包限额开关（掩码清零）
-          await (await contract.setClaims('0x' + '00'.repeat(19) + 'EE', 0)).wait();
-          message.info('✅ 已关闭钱包限额');
-          // 把主交易对也加白名单
-          const pair = await readOnlyContract._mainPair();
-          if (pair) {
-            await (await contract.setWhiteList([pair], true)).wait();
-            message.info('✅ 交易对已加入白名单');
-          }
-          message.success('🎉 修复完成！现在去 DEX 添加流动性吧');
-        } catch(e) { message.error('修复失败: ' + e.message); }
-        setFixing(false);
-      };
-      return (
-        <OwnerGuard isOwner={isOwner}>
-          <Divider />
-          <Alert message="如果你添加流动性时遇到 TRANSFER_FROM_FAILED 或 add liquidity restricted，点这里自动修复所有限制" type="warning" showIcon style={{ marginBottom: 12 }} />
-          <Button type="primary" danger loading={fixing} onClick={fix}>🔧 一键修复添加流动性失败</Button>
-        </OwnerGuard>
-      );
-    }
-
-    // 主应用
+    // ---------- 主应用 ----------
     function App() {
-      const [addr, setAddr] = useState(localStorage.getItem('cccrrrccc_addr_v2') || '');
+      const [addr, setAddr] = useState(localStorage.getItem('cccrrrccc_v22') || '');
       const [refreshKey, setRefreshKey] = useState(0);
       const { contract, readOnlyContract, account, isOwner, connectWallet } = usePandaContract(addr, PandaTokenABI);
       const [tab, setTab] = useState('basic');
 
-      useEffect(() => { localStorage.setItem('cccrrrccc_addr_v2', addr); }, [addr]);
+      useEffect(() => { localStorage.setItem('cccrrrccc_v22', addr); }, [addr]);
 
       const menuItems = [
         { key: 'basic', label: '基础信息' },
@@ -434,16 +585,20 @@
         { key: 'limit', label: '限额/开关' },
         { key: 'mint', label: '公售配置' },
         { key: 'whitelist', label: '白名单' },
-        { key: 'hidden', label: '隐藏功能' },
-        { key: 'fix', label: '修复流动性' }
+        { key: 'hidden', label: '隐藏功能' }
       ];
 
       return (
         <ErrorBoundary>
           <Layout>
             <Header className="header">
-              <h1>CCCRRRCCC 控制面板 v2.0</h1>
-              <Input placeholder="输入合约地址（自动保存）" value={addr} onChange={e => setAddr(e.target.value)} style={{ width: 320 }} />
+              <h1>CCCRRRCCC 控制面板 v2.2</h1>
+              <Input
+                placeholder="合约地址（自动保存）"
+                value={addr}
+                onChange={e => setAddr(e.target.value)}
+                style={{ width: 320 }}
+              />
               <Button onClick={() => setRefreshKey(k => k+1)}>刷新数据</Button>
               <Button type="primary" onClick={connectWallet}>
                 {account ? `${account.slice(0,6)}...${account.slice(-4)}` : '连接钱包'}
@@ -454,26 +609,26 @@
               <Content className="content">
                 {!readOnlyContract ? (
                   <div style={{ padding: 24 }}>
-                    <h2>欢迎使用 CCCRRRCCC 控制面板</h2>
-                    <p>1. 输入合约地址（已自动保存）</p>
-                    <p>2. 点击「连接钱包」</p>
-                    <p>3. 开始管理你的代币</p>
+                    <h2>CCCRRRCCC 全量控制面板</h2>
+                    <p>✅ 已内置所有公开参数，鼠标悬停可见中文说明</p>
+                    <p>1. 输入合约地址（自动保存）</p>
+                    <p>2. 连接钱包</p>
+                    <p>3. 左侧菜单切换功能</p>
                     {!addr && <Alert message="请先输入合约地址" type="info" />}
                   </div>
                 ) : (
                   <>
                     {tab === 'basic' && <BasicInfo readOnlyContract={readOnlyContract} contract={contract} isOwner={isOwner} refreshKey={refreshKey} />}
-                    {tab === 'tax' && <TaxSettings readOnlyContract={readOnlyContract} contract={contract} isOwner={isOwner} refreshKey={refreshKey} />}
+                    {tab === 'tax' && <TaxSettings contract={contract} isOwner={isOwner} />}
                     {tab === 'limit' && <LimitAndSwitches readOnlyContract={readOnlyContract} contract={contract} isOwner={isOwner} refreshKey={refreshKey} />}
                     {tab === 'mint' && <MintConfig readOnlyContract={readOnlyContract} contract={contract} isOwner={isOwner} refreshKey={refreshKey} />}
                     {tab === 'whitelist' && <WhiteListManager contract={contract} isOwner={isOwner} />}
                     {tab === 'hidden' && <HiddenPanel contract={contract} readOnlyContract={readOnlyContract} isOwner={isOwner} />}
-                    {tab === 'fix' && <LiquidityFixer readOnlyContract={readOnlyContract} contract={contract} account={account} isOwner={isOwner} />}
                   </>
                 )}
               </Content>
             </Layout>
-            <Footer style={{ textAlign: 'center' }}>CCCRRRCCC 控制面板 v2.0 · 完全内置 · 无需额外配置</Footer>
+            <Footer style={{ textAlign: 'center' }}>CCCRRRCCC 控制面板 v2.2 · 全量参数 · 中文说明</Footer>
           </Layout>
         </ErrorBoundary>
       );
